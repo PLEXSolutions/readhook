@@ -1,6 +1,13 @@
 # OS specific
 .DS_Store
 
+# vi/vim et. al.
+*.swl
+*.swm
+*.swn
+*.swo
+*.swp
+
 # Prerequisites
 *.d
 
