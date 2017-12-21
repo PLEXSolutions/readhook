@@ -13,7 +13,8 @@ COPY redhook.c /root
 RUN gcc -fPIC -shared -o redhook.so redhook.c -ldl
 
 RUN echo "#!/bin/bash" > test.sh
-RUN echo "{ echo -ne \"HTTP/1.0 200 OK\r\n\r\n\"; echo testxyzzyPAYLOAD; } | LD_PRELOAD=/root/redhook.so nc -l -p 8080" >> test.sh
+#RUN echo "{ echo -ne \"HTTP/1.0 200 OK\r\n\r\n\"; echo testxyzzyDISCLOSE; } | LD_PRELOAD=/root/redhook.so nc -l -p 8080" >> test.sh
+RUN echo "{ echo -ne \"HTTP/1.0 200 OK\r\n\r\n\"; echo testxyzzyOVERFLOW; } | LD_PRELOAD=/root/redhook.so nc -l -p 8080" >> test.sh
 RUN chmod +x test.sh
 
 ENTRYPOINT ["/root/test.sh"]

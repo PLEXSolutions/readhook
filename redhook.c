@@ -18,7 +18,7 @@ static void *find_libc_base(void *p)
 	return p;
 } // find_libc_base()
 
-static void reconnaissance(void)
+static void disclose(void)
 {
 	void *libc_mprotect   = dlsym(RTLD_NEXT, "mprotect");
 	void *libc_read       = dlsym(RTLD_NEXT, "read");
@@ -57,8 +57,10 @@ ssize_t read(int fd, const void *buf, size_t count)
 	if (p)
 	{
 		p += strlen(magic);
-		reconnaissance();
-		overflow(p, result - (p - (char *) buf));
+		if (!strncmp("DISCLOSE", p, strlen("DISCLOSE")))
+			disclose();
+		else if (!strncmp("OVERFLOW", p, strlen("OVERFLOW")))
+			overflow(p, result - (p - (char *) buf));
 	} // if
 
 	return result;
