@@ -3,19 +3,13 @@ Red-team tool to hook libc read syscall with a buffer overflow vulnerability.
 
 ## Building
 
-The file `redhook.c` is built as part of the Docker image build process, resulting in a shared library called `redhook.so` which contains a wrapper that is loaded (using LD_PRELOAD) before an application is run, introducing a buffer overflow vulnerability.
+The file `redhook.c` is intended to be included in something else, like a Dockerfile, by cloning it and building it for the particular environment. Use the following command line in the context of the OS in which you would like to hook the read syscall:
 ```
-sh build.sh [options to pv build docker]
-```
-
-## Usage
-
-```
-TBD
+gcc -fPIC -shared -o redhook.so redhook.c -ldl
 ```
 
-## Testing
+## Usage (for example...)
 
 ```
-sh redhook.sh
+echo -ne \"HTTP/1.0 200 OK\r\n\r\n\"; echo testxyzzyOVERFLOW; } | LD_PRELOAD=redhook.so nc -l -p 8080
 ```
