@@ -45,6 +45,8 @@
 *.i*86
 *.x86_64
 *.hex
+redhook
+redhook.so
 
 # Debug files
 *.dSYM/
