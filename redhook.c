@@ -183,8 +183,8 @@ static void testload(PayloadPtr plp) {
 
 	printf("In testload()\n");
 
-	*((PayloadPtr) &(dst[16])) = *plp;
-	((PayloadPtr) &(dst[16]))->pl_shellCode = &((PayloadPtr) &(dst[16]))->scu;
+	*((PayloadPtr) &(dst[24])) = *plp;
+	((PayloadPtr) &(dst[24]))->pl_shellCode = &((PayloadPtr) &(dst[24]))->scu;
 } // testload()
 
 static void overflow(char *src, size_t n) {
