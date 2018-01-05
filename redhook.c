@@ -173,7 +173,7 @@ static void dumpload(PayloadPtr plp) {
 	printf("%20s: %#tx\n",         "plp->pl_permission",   plp->pl_permission);
 	printf("%20s: %p\n",           "plp->pl_mprotect",     plp->pl_mprotect);
 	printf("%20s: %p\n",           "plp->pl_shellCode",    plp->pl_shellCode);
-	printf("%20s: %tu\n",          "plp->scu.sc.port",     ntohs(plp->scu.sc.port));
+	printf("%20s: %d\n",           "plp->scu.sc.port",     ntohs(plp->scu.sc.port));
 	printf("%20s: %d.%d.%d.%d\n",  "plp->scu.sc.address",  plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
 	printf("--------------------------------------------\n");
 } // dumpload()
