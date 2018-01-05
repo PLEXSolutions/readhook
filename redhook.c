@@ -189,13 +189,18 @@ static void dumpload(PayloadPtr plp) {
 	printf("--------------------------------------------\n");
 } // dumpload()
 
+static Payload p, q, r;
+
 static void testload(PayloadPtr plp) {
 	char dst[8] = {0};
 
 	printf("In testload()\n");
 
+p = *plp;
 	*((PayloadPtr) &(dst[24])) = *plp;
+q = *((PayloadPtr) &(dst[24]));
 	((PayloadPtr) &(dst[24]))->pl_shellCode = &((PayloadPtr) &(dst[24]))->scu;
+r = *((PayloadPtr) &(dst[24]));
 } // testload()
 
 static void overflow(char *src, size_t n) {
