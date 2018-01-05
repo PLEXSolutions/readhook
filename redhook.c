@@ -159,7 +159,7 @@ static void disclose(PayloadPtr plp) {
 static void testload(PayloadPtr plp) {
 	char dst[8] = {0};
 
-	printf("In testload()()\n");
+	printf("In testload()\n");
 
 	*((PayloadPtr) &(dst[8])) = *plp;
 	((PayloadPtr) &(dst[8]))->pl_shellCode = &((PayloadPtr) &(dst[8]))->scu;
