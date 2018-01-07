@@ -38,10 +38,11 @@ static const char *s_elf_signature = "\0x7fELF";
 
 static const char *s_magic = "xyzzy";
 
-static const char *s_overflow = "OVERFLOW";
 static const char *s_makeload = "MAKELOAD";
 static const char *s_fillload = "FILLLOAD";
 static const char *s_dumpload = "DUMPLOAD";
+static const char *s_overload = "OVERLOAD";
+static const char *s_overflow = "OVERFLOW";
 
 static const char *s_libc_base     = "base";
 static const char *s_libc_mprotect = "mprotect";
@@ -235,6 +236,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 			dumpload(&payload);
 		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
 			fillload(&payload, sizeof(payload));
+		else if (!strncmp(s_overload, p, strlen(s_overload)))
+			overflow((char *)&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
 			overflow(p, result - (p - (char *) buf));
 	} // if
