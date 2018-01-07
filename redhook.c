@@ -54,7 +54,7 @@ static const char *s_magic = "xyzzy";
 static const char *s_makeload = "MAKELOAD";
 static const char *s_fillload = "FILLLOAD";
 static const char *s_dumpload = "DUMPLOAD";
-static const char *s_overload = "OVERLOAD";
+static const char *s_testload = "TESTLOAD";
 static const char *s_overflow = "OVERFLOW";
 
 static const char *s_libc_base     = "base";
@@ -292,7 +292,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 			dumpload(&payload);
 		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
 			fillload(&payload, sizeof(payload));
-		else if (!strncmp(s_overload, p, strlen(s_overload)))
+		else if (!strncmp(s_testload, p, strlen(s_testload)))
 			overflow((char *)&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
 			overflow(p, result - (p - (char *) buf));
