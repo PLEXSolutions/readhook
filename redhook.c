@@ -242,6 +242,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 	return result;
 } // read()
 
+#ifdef REDHOOK_MAIN
 int main(int argc, char **argv)
 {
 	assert(sizeof(short) == 2);
@@ -261,3 +262,4 @@ int main(int argc, char **argv)
 	dumpload(&payload);
 	overflow((char *) &payload, sizeof(payload));
 } // main()
+#endif
