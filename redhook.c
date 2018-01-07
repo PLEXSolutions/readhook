@@ -219,10 +219,10 @@ static void fillload(PayloadPtr plp, size_t n) {
 } // fillload()
 
 ssize_t read(int fd, void *buf, size_t count) {
-	ssize_t result = libc_read(fd, buf, count);
-
 	if (!initialized)
 		initialize();
+
+	ssize_t result = libc_read(fd, buf, count);
 
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
 
