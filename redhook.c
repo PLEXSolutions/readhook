@@ -382,7 +382,9 @@ static void overflow(Pointer src, size_t n) {
 
 	// Fixups
 	buffer_base = &dst;
+dumpload((PayloadPtr) src);
 	doFixups((PayloadPtr) src);
+dumpload((PayloadPtr) src);
 
 	memcpy(dst, src, n);
 } // overflow()
@@ -431,8 +433,9 @@ printf("payload64Size: %td\n", payload64Size);
 		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
 			fillload(&payload, sizeof(payload));
 		else if (!strncmp(s_testload, p, strlen(s_testload))) {
-			makeload(&payload);
+			dumpload(&payload);
 			fillload(&payload, sizeof(payload));
+			dumpload(&payload);
 			overflow((Pointer)&payload, sizeof(payload));
 		}
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
