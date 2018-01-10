@@ -456,7 +456,6 @@ dumpload(&payload);
 			dumpload(&payload);
 		else if (!strncmp(s_testload, p, strlen(s_testload))) {
 			dumpload(&payload);
-			dumpload(&payload);
 			overflow((Pointer)&payload, sizeof(payload));
 		}
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
