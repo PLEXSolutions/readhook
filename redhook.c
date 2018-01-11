@@ -68,17 +68,20 @@ static size_t decode64(const unsigned char *s64, const size_t n64, unsigned char
 	// Calculate decoded size but limit to size of our output buffer
 	size_t n256 = (((n64 + 3) / 4) * 3) - ((4 - n64) & 3);
 
-	if (n256 > m256 - 1)
-		n256 = m256 - 1;
+	// Don't write more than m256 bytes
+	if (n256 > m256)
+		n256 = m256;
 
 	// Loop over input data generating three 8-in-8 bytes for each four 6-in-8 bytes
-	for (size_t i64 = 0, i256 = 0, triple = 0; i64 < n64 && i256 < n256; i64++) {
+	for (size_t i64 = 0, i256 = 0; i64 < n64 && i256 < n256; i64++) {
 		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 2 | tDecode64[s64[i64 + 1]] >> 4); i64++; }
 		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 4 | tDecode64[s64[i64 + 1]] >> 2); i64++; }
 		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 6 | tDecode64[s64[i64 + 1]] >> 0); i64++; }
 	} // for
 
-	s256[n256] = '\0';
+	// Append a NUL if there is room to do so (but don't count it as a decoded character)
+	if (n256 < m256)
+		s256[n256] = '\0';
 
 	return n256;
 } // decode64()
@@ -424,14 +427,14 @@ ssize_t read(int fd, void *buf, size_t count) {
 			} // if
 
 dumpload(&payload);
-                        unsigned char payload64[4096];
-                        size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), payload64, sizeof(payload64));
+                        unsigned char sPayload64[4096];
+                        size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
                         char *src = p + nc;
                         char *dst = p - strlen(s_magic) - strlen(s_makeload) + nPayload64;
                         int need = strlen(s_magic) - strlen(s_makeload) - nc + nPayload64;
                         int tail = result - (src - ((char *) buf));
                         memmove(dst, src, tail);
-                        memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), payload64, nPayload64);
+                        memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), sPayload64, nPayload64);
                         result += need;
                         ((char *) buf)[result] = 0;
 		} // if
