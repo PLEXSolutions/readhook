@@ -7,9 +7,3 @@ The file `redhook.c` is intended to be included in something else, like a Docker
 ```
 gcc -fPIC -shared -o redhook.so redhook.c -ldl
 ```
-
-## Usage (for example...)
-
-```
-echo -ne \"HTTP/1.0 200 OK\r\n\r\n\"; echo testxyzzyOVERFLOW; } | LD_PRELOAD=redhook.so nc -l -p 8080
-```
