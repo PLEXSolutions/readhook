@@ -1,5 +1,4 @@
 #!/bin/bash
-
 REPOSITORY=polyverse/redhook
 ASSET_NAME=redhook.so
 RELEASE_TAG=v0.0.0
