@@ -297,7 +297,7 @@ static AddressUnion fixupAddressUnion(AddressUnion au) {
 	if (au.o.f == '*')
 		return (AddressUnion) { .p = offsetToIndirect(au.o) };
 
-	return (AddressUnion) { .p = (Pointer) (unsigned long) au.o.r };
+	return au;
 } // fixupAddressUnion()
 
 static int lookupHostName(char *hostName , char *ip)
@@ -400,7 +400,6 @@ static void doFixups(Pointer p, size_t n) {
 
 	// Perform fixups on anything in range, on 8 byte boundaries, that contains a valid fixup signature
 	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++) {
-		assert((((unsigned long) aup ) & 0x7) == 0);
 		*aup = fixupAddressUnion(*aup);
 	} // for
 } // doFixups()
