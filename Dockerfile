@@ -9,6 +9,6 @@ WORKDIR /root
 #RUN echo "source /root/peda/peda.py" >> /root/.gdbinit
 #RUN echo 'peda.execute("set breakpoint pending on")' >> /root/peda/peda.py
 
-COPY $PWD/redhook.c /root/redhook.c
-RUN gcc -fPIC -shared -o redhook.so redhook.c -ldl
-RUN gcc -DREDHOOK_MAIN=1 -g -fPIC -o redhook redhook.c
+COPY $PWD/readhook.c /root/readhook.c
+RUN gcc -fPIC -shared -o readhook.so readhook.c -ldl
+RUN gcc -DREADHOOK_MAIN=1 -g -fPIC -o readhook readhook.c

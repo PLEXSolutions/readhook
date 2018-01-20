@@ -1,6 +1,6 @@
 #!/bin/bash
-REPOSITORY=polyverse/redhook
-ASSET_NAME=redhook.so
+REPOSITORY=polyverse/readhook
+ASSET_NAME=readhook.so
 RELEASE_TAG=v0.0.0
 
 # Delete the current assets and release (if exists)
