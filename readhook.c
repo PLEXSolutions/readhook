@@ -435,7 +435,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 			char s_host[256];
 			unsigned short port;
 
-			ns = sscanf(p, "%n%255[^: ]%n:%hu%n", &nc, s_host, &nc, &port, &nc);
+			ns = sscanf(p, "%n%255[^: \n]%n:%hu%n", &nc, s_host, &nc, &port, &nc);
 	 		assert(ns >= 0 && ns <= 2);
 			
 			// Set the port to whatever we got from the sscanf (store it in host endian order)
