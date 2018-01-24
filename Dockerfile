@@ -1,14 +1,19 @@
 FROM alpine:3.7
   
-RUN apk update
-RUN apk add bash curl gcc git libc-dev
-#RUN apk add gdb make nasm python
+RUN	apk update
+RUN	apk add bash curl gcc git libc-dev
+#RUN	apk add gdb make nasm python
 
-WORKDIR /root
-#RUN git clone https://github.com/longld/peda.git
-#RUN echo "source /root/peda/peda.py" >> /root/.gdbinit
-#RUN echo 'peda.execute("set breakpoint pending on")' >> /root/peda/peda.py
+WORKDIR	/root
+#RUN	git clone https://github.com/longld/peda.git
+#RUN	echo "source /root/peda/peda.py" >> /root/.gdbinit
+#RUN	echo 'peda.execute("set breakpoint pending on")' >> /root/peda/peda.py
 
-COPY $PWD/readhook.c /root/readhook.c
-RUN gcc -fPIC -shared -o readhook.so readhook.c -ldl
-RUN gcc -DREADHOOK_MAIN=1 -g -fPIC -o readhook readhook.c
+WORKDIR	/readhook
+COPY	. .
+
+RUN	gcc -c -fPIC -o obj/base64.o src/base64.c
+RUN	gcc -c -fPIC -o obj/strnstr.o src/strnstr.c
+
+RUN	gcc -fPIC -shared -o readhook.so src/readhook.c obj/base64.o obj/strnstr.o -ldl
+RUN	gcc -DREADHOOK_MAIN=1 -fPIC -o readhook src/readhook.c obj/base64.o obj/strnstr.o

