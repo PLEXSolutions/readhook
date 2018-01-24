@@ -1,7 +1,11 @@
 #!/bin/bash
 REPOSITORY=polyverse/readhook
 ASSET_NAME=readhook.so
-RELEASE_TAG=v1.0.0
+RELEASE_TAG=$1
+
+if [[ "$RELEASE_TAG" == "" ]]; then
+	RELEASE_TAG=latest
+fi
 
 # Delete the current assets and release (if exists)
 asset_id_from_release_tag_and_name=$(pv github asset-id-from-release-tag-and-name $REPOSITORY $RELEASE_TAG $ASSET_NAME)
