@@ -7,3 +7,5 @@ The file `readhook.c` is intended to be included in something else, like a Docke
 ```
 ./build.sh
 ```
+## Tutorial
+See https://blog.polyverse.io/an-intentional-buffer-overflow-hmm-5c357238b687
