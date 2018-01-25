@@ -12,8 +12,10 @@ WORKDIR	/root
 WORKDIR	/readhook
 COPY	. .
 
+RUN	gcc -c -fPIC -o obj/addresses.o src/addresses.c
 RUN	gcc -c -fPIC -o obj/base64.o src/base64.c
+RUN	gcc -c -fPIC -o obj/payload.o src/payload.c
 RUN	gcc -c -fPIC -o obj/strnstr.o src/strnstr.c
 
-RUN	gcc -fPIC -shared -o readhook.so src/readhook.c obj/base64.o obj/strnstr.o -ldl
-RUN	gcc -DREADHOOK_MAIN=1 -fPIC -o readhook src/readhook.c obj/base64.o obj/strnstr.o
+RUN	gcc -fPIC -shared -o readhook.so src/readhook.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o -ldl
+RUN	gcc -DREADHOOK_MAIN=1 -fPIC -o readhook src/readhook.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o
