@@ -16,13 +16,13 @@ static const char s_testload[]	= "TESTLOAD";
 static const char s_overflow[]	= "OVERFLOW";
 
 // Parse the stuff following MAKELOAD into s_host:port
-static ssize_t parseHostAndPort(char *p, ssize_t extent, struct in_addr *ipAddress, unsigned short *port) {
+static ssize_t parseHostAndPort(char *p, struct in_addr *ipAddress, unsigned short *port) {
 	char s_host[256];
-	unsigned short np;
-	int nc = 0, ns = sscanf(p, "%[A-Za-z0-9-.]%n:%hu%n", s_host, &nc, &np, &nc);
+	unsigned short nport;
+	int nc = 0, ns = sscanf(p, "%[A-Za-z0-9-.]%n:%hu%n", s_host, &nc, &nport, &nc);
 	assert(ns >= 0 && ns <= 2);
 
-	*port = htons((ns > 1) ? np : 5555);
+	*port = htons((ns > 1) ? nport : 5555);
 
 	// See if the s_host string can be parsed by inet_aton()
 	if (inet_aton(s_host, ipAddress) == 0)
@@ -30,12 +30,13 @@ static ssize_t parseHostAndPort(char *p, ssize_t extent, struct in_addr *ipAddre
 			for (int i = 0; ((struct in_addr **) he->h_addr_list)[i] != NULL; i++)
  				*ipAddress = *((struct in_addr **) he->h_addr_list)[i];
 
+	// Return number of characters consumed parsing the Host and IP Address.
 	return nc;
 } // parseHostAndPort()
 
-static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t extent) {
+static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np) {
 	// Parse the IP Address and port into our payload
-	int nc = parseHostAndPort(p, extent, &plp->pl_scu.sc.ipAddress, &plp->pl_scu.sc.port);
+	int nc = parseHostAndPort(p, &plp->pl_scu.sc.ipAddress, &plp->pl_scu.sc.port);
 	
 	// Generate the payload that we will "echo" back
 	unsigned char sPayload64[4096];
@@ -45,7 +46,7 @@ static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t extent) {
 	char *src = p + nc;
 	char *dst = p + nPayload64 - strlen(s_makeload) + strlen(s_overflow);
 	int delta = dst - src;
-	memmove(dst, src, extent - nc);
+	memmove(dst, src, np - nc);
 
 	// Replace s_makeload with s_overflow
 	memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
