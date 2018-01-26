@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <string.h>
+
 #include "strnstr.h"
 
 char *strnstr(const char *s1, const char *s2, size_t len)

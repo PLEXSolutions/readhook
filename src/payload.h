@@ -1,6 +1,7 @@
 #ifndef _PAYLOAD_H_
 #define _PAYLOAD_H_
 #include <arpa/inet.h>
+
 #include "addresses.h"
 
 typedef struct ShellCode {
@@ -31,7 +32,7 @@ typedef struct Payload {
 	ShellCodeUnion	pl_scu;
 } Payload, *PayloadPtr;
 
-extern Payload baseload(void);
+extern void initload(PayloadPtr plp);
 extern void makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
 extern void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
 #endif

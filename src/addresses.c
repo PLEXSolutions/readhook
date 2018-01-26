@@ -1,9 +1,37 @@
 #define _GNU_SOURCE
+#include <string.h>
+#include <unistd.h>
+
 #include "addresses.h"
+
+static Pointer pageBase(Pointer p) {
+	return (Pointer) (((unsigned long) p) & (-1 ^ getpagesize() - 1));
+} // pageBase()
+
+static Pointer elfBase(Pointer p) {
+	const char s_elf_signature[] = {0x7F, 'E', 'L', 'F', 0};
+
+	p = pageBase(p);
+	while (strncmp(p, s_elf_signature, strlen(s_elf_signature)))
+		p -= getpagesize();
+
+	return p;
+} // elfBase()
+
+void initBaseAddresses(BaseAddressesPtr baseAddressesPtr) {
+	int dummy;
+
+	*baseAddressesPtr = (BaseAddresses) {
+		.buf_base    = NULL,
+		.libc_base   = elfBase(strcpy),
+		.pie_base    = elfBase(initBaseAddresses),
+		.stack_base  = pageBase(&dummy)
+	};
+} // initBaseaddresses()
 
 Pointer baseAddress(char base, BaseAddressesPtr baseAddressesPtr) {
 	switch (base) {
-		case 'B' : return baseAddressesPtr->buffer_base;
+		case 'B' : return baseAddressesPtr->buf_base;
 		case 'L' : return baseAddressesPtr->libc_base;
 		case 'P' : return baseAddressesPtr->pie_base;
 		case 'S' : return baseAddressesPtr->stack_base; // Actually just base of current stack page
