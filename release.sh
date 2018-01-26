@@ -17,6 +17,10 @@ echo "delete-release-asset:\n$delete_release_asset\n"
 delete_release_by_tag=$(pv github delete-release-by-tag $REPOSITORY $RELEASE_TAG)
 echo "delete-release-by-tag:\n$delete_release_by_tag\n"
 
+# Delete the tag so it's not stuck at the last release with the same name
+delete_tag=$(pv github delete-tag $REPOSITORY $RELEASE_TAG)
+echo "delete-tag:\n$delete_tag\n"
+
 # (Re-)create the release and upload the library binary file asset
 create_release=$(pv github create-release $REPOSITORY $RELEASE_TAG)
 echo "create-release:\n$create_release\n"
