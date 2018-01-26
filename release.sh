@@ -4,7 +4,7 @@ ASSET_NAME=readhook.so
 RELEASE_TAG=$1
 
 if [[ "$RELEASE_TAG" == "" ]]; then
-	RELEASE_TAG=volatile
+	RELEASE_TAG=v1.0.0
 fi
 
 # Delete the current assets and release (if exists)
