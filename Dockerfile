@@ -18,8 +18,12 @@ RUN	gcc -c -fPIC -o obj/base64.o src/base64.c
 RUN	gcc -c -fPIC -o obj/payload.o src/payload.c
 RUN	gcc -c -fPIC -o obj/strnstr.o src/strnstr.c
 
-RUN	gcc -fPIC -shared -o makeload.so src/makeload.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o -ldl
-RUN	gcc -DMAKELOAD_MAIN=1 -fPIC -o makeload src/makeload.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o
+RUN	mkdir ./lib
+RUN	ar -cvq lib/hookutil.a obj/*.o
 
-RUN	gcc -fPIC -shared -o readhook.so src/readhook.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o -ldl
-RUN	gcc -DREADHOOK_MAIN=1 -fPIC -o readhook src/readhook.c obj/addresses.o obj/base64.o obj/payload.o obj/strnstr.o
+RUN	mkdir ./dll
+RUN	gcc -fPIC -shared -o dll/makeload.so src/makeload.c lib/hookutil.a -ldl
+RUN	gcc -fPIC -shared -o dll/readhook.so src/readhook.c lib/hookutil.a -ldl
+
+RUN	mkdir ./app
+RUN	gcc -DMAKELOAD_MAIN=1 -fPIC -o app/makeload src/makeload.c lib/hookutil.a
