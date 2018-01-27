@@ -12,6 +12,7 @@ WORKDIR	/root
 WORKDIR	/readhook
 COPY	. .
 
+RUN	mkdir ./obj
 RUN	gcc -c -fPIC -o obj/addresses.o src/addresses.c
 RUN	gcc -c -fPIC -o obj/base64.o src/base64.c
 RUN	gcc -c -fPIC -o obj/payload.o src/payload.c
