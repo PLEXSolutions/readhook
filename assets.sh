@@ -1,6 +1,6 @@
 #!/bin/bash
 REPOSITORY=polyverse/readhook
-ASSETS="makeload.so readhook.so"
+ASSETS="basehook.so fullhook.so"
 RELEASE_TAG=$1
 
 if [[ "$RELEASE_TAG" == "" ]]; then

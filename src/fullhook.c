@@ -126,7 +126,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 	return result;
 } // read()
 
-#ifdef MAKELOAD_MAIN
+#ifdef FULLHOOK_MAIN
 int main(int argc, char **argv)
 {
 	fprintf(stderr, "Running (testing) as an executable\n");
