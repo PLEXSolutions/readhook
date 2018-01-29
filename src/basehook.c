@@ -37,7 +37,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 
 		 if (!strncmp(s_overflow, p, strlen(s_overflow))) {
 			unsigned char *s64 = (unsigned char *) (p + strlen(s_overflow));
-			size_t n256 = b64Decode(s64, b64Length(s64), (unsigned char *) p, 65535);
+			size_t n256 = b64Decode(s64, b64Length(s64), (unsigned char *) p, 65535); // ToDo: Unknown upper bounds
 			overflow(p, n256, &baseAddresses);
 		} // if
 	} // if

@@ -10,7 +10,7 @@
 #include "payload.h"
 #include "strnstr.h"
 
-static const char s_magic[]	= "xyzzz";
+static const char s_magic[]	= "xyzzx";
 static const char s_makeload[]	= "MAKELOAD";
 static const char s_dumpload[]	= "DUMPLOAD";
 static const char s_overload[]	= "OVERLOAD";
