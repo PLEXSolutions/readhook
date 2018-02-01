@@ -47,11 +47,11 @@ Offset indirectToOffset(Pointer p, char base, BaseAddressesPtr baseAddressesPtr)
 	return (Offset) { (p - baseAddress(base, baseAddressesPtr)), base, '*' };
 } // indirectToOffset()
 
-Pointer offsetToPointer(Offset o, BaseAddressesPtr baseAddressesPtr) {
+static Pointer offsetToPointer(Offset o, BaseAddressesPtr baseAddressesPtr) {
 	return (Pointer) (o.r + baseAddress(o.b, baseAddressesPtr));
 } // offsetToPointer()
 
-Pointer offsetToIndirect(Offset o, BaseAddressesPtr baseAddressesPtr) {
+static Pointer offsetToIndirect(Offset o, BaseAddressesPtr baseAddressesPtr) {
 	return *((Pointer *) offsetToPointer(o, baseAddressesPtr));
 } // offsetToIndirect()
 

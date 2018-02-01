@@ -27,8 +27,6 @@ extern void         initBaseAddresses(BaseAddressesPtr baseAddresses);
 extern Pointer      baseAddress(char base, BaseAddressesPtr baseAddressesPtr);
 extern Offset       pointerToOffset(Pointer p, char base, BaseAddressesPtr baseAddressesPtr);
 extern Offset       indirectToOffset(Pointer p, char base, BaseAddressesPtr baseAddressesPtr);
-extern Pointer      ffsetToPointer(Offset o, BaseAddressesPtr baseAddressesPtr);
-extern Pointer      offsetToIndirect(Offset o, BaseAddressesPtr baseAddressesPtr);
 extern AddressUnion fixupAddressUnion(AddressUnion au, BaseAddressesPtr baseAddressesPtr);
 extern void         dofixups(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr);
 #endif
