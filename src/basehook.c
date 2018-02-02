@@ -8,7 +8,7 @@
 #include "base64.h"
 #include "strnstr.h"
 
-static const char s_magic[]	= "xyzzy";
+static const char s_basemagic[]	= "xyzzy";
 static const char s_overflow[]	= "OVERFLOW";
 
 // This is the overflow that readhook is all about.
@@ -27,10 +27,10 @@ ssize_t read(int fd, void *buf, size_t count) {
 	Read *libc_read = (Read *) dlsym(RTLD_NEXT, "read");
 	ssize_t result = libc_read(fd, buf, count);
 
-	char *p = (result < strlen(s_magic)) ? NULL : strnstr(buf, s_magic, result);
+	char *p = (result < strlen(s_basemagic)) ? NULL : strnstr(buf, s_basemagic, result);
 
 	if (p) {
-		p += strlen(s_magic);
+		p += strlen(s_basemagic);
 
 		BaseAddresses baseAddresses;
 		initBaseAddresses(&baseAddresses);

