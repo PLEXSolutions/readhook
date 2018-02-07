@@ -7,8 +7,8 @@ This is the first 'get up and running' version. As a result, many aspects are ei
 ## v1.1: Re-factor
 This iteration splits out the payload analysis and generation code (fullhook.so) from the synthetic vulnerability (basehook.so).
 
-## v3: Auto-generation of payloads
+## v2: Auto-generation of payloads
 In this release, we will use the EnViz project (https://github.com/polyverse/binary-entropy-visualizer) to automatically create payloads.
 
-## v4: Configuratable vulnerabilities
+## v3: Configurable vulnerabilities
 Make it easier to exploit different types of vulnerabilities (e.g. use after free, etc.) versus a standard buffer overflow.
