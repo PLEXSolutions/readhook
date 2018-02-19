@@ -8,8 +8,8 @@
 ### (2) We'll need curl and wget
     apk update && apk add curl wget ca-certificates && update-ca-certificates
 ### (2) Get readhook components
-    wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/v1.1.0/basehook.so
-    wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/v1.1.0/fullhook.so
+    wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/v1.1.1/basehook.so
+    wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/v1.1.1/fullhook.so
 ### (2) Start nc with readhook in front of libc
     LD_PRELOAD="/tmp/fullhook.so /tmp/basehook.so" nc -l -p 8080 -e /bin/cat
 ## Generate Shell-Code and Perform Exploit
