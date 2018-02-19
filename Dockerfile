@@ -22,8 +22,8 @@ RUN	mkdir ./lib
 RUN	ar -cvq lib/utilhook.a obj/*.o
 
 RUN	mkdir ./dll
-RUN	gcc -fPIC -shared -o dll/basehook.so src/basehook.c lib/utilhook.a -ldl
-RUN	gcc -fPIC -shared -o dll/fullhook.so src/fullhook.c lib/utilhook.a -ldl
+RUN	gcc -fstack-protector-all -fPIC -Fpie -pie -Wl,-z,relro,-z,now -shared -o dll/basehook.so src/basehook.c lib/utilhook.a -ldl
+RUN	gcc -fstack-protector-all -fPIC -Fpie -pie -Wl,-z,relro,-z,now -shared -o dll/fullhook.so src/fullhook.c lib/utilhook.a -ldl
 
 RUN	mkdir ./app
 RUN	gcc -DFULLHOOK_MAIN=1 -fPIC -o app/fullhook src/fullhook.c lib/utilhook.a
