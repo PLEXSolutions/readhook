@@ -4,7 +4,7 @@
     nc -kl 5555
 ## Run a simple nc echo server under Readhook
 ### (2) Start with a clean alpine:3.7 (Session-2)
-    docker run --rm --name echo -it -p 8080:8080 alpine:3.7 sh
+    docker run --rm -it -p 8080:8080 alpine:3.7 sh
 ### (2) We'll need curl and wget
     apk update && apk add curl wget ca-certificates && update-ca-certificates
 ### (2) Get readhook components
