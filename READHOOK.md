@@ -32,4 +32,4 @@
 ### (3) Try the shellCode with Polymorphic Linux
     echo $shellCode | nc localhost 8080
 ### (1) Confirm that nobody phoned-home to the listener
-### (2) Confirm that the server terminated abnormally (e.g. Segmentation fault)
+### (2) Confirm that the server terminated abnormally
