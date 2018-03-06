@@ -7,11 +7,15 @@ Readhook is a set of two "hook" routines that can be injected into an applicatio
 ./build.sh
 ```
 ## Testing
-Start listenter on host:port in another shell before running the following command:
+First, start a listener (in a different shell) for test.sh to phone-home to. e.g.
 ```
-./test.sh <host<:port>>
+nc -l 5555
 ```
-Test.sh will run fullhook as an application. The default host is docker.for.mac.localhost. The default port is 5555. 
+Then, run test.sh. e.g.
+```
+./test.sh localhost:5555
+```
+Test.sh will run fullhook as an application. The default host is docker.for.mac.localhost. The default port is 5555. The purpose of test.sh and fullhook (the application) are to generate a payload against fullhook (the application) and manually call the internal, vulnerable buffer overflow with the generated payload. If a listener is started first, and reachable by fullhook (the application) running in the container, it should phone-home with a reverse shell. If the reverse shell fails to connect to the listener, or if the payload is not correct (a program error that test.sh is intended to detect for developers), the program behavior is undefined and may include: segment violation, illegal addresss, illegal instruction, infinite looping, and so on. In that sense, there is only one "defined" behavior for fullhook (the application), and that behavior is to phone-home to the listener. Failure to phone-home to the listener will result in "undefined" behavior by the program. 
 
 ## Tutorial
 See https://blog.polyverse.io/an-intentional-buffer-overflow-hmm-5c357238b687

@@ -28,4 +28,4 @@ RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -Fpie -pie src/basehook.c -Wl,-z,
 RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -Fpie -pie src/fullhook.c -Wl,-z,relro,-z,now -shared -lc -ldl lib/utilhook.a -o dll/fullhook.so
 
 RUN	mkdir ./app
-RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -Fpie -pie -DFULLHOOK_MAIN=1 src/fullhook.c lib/utilhook.a -Wl,-z,relro,-z,now -lc -ldl -o app/fullhook
+RUN	gcc -std=gnu99 -fPIC -Fpie -pie -DFULLHOOK_MAIN=1 src/fullhook.c lib/utilhook.a -Wl,-z,relro,-z,now -lc -ldl -o app/fullhook
