@@ -2,7 +2,7 @@
 Red-team tool to hook libc read syscall with a buffer overflow vulnerability.
 
 ## Building
-Readhook is a set of two "hook" routines that can be injected into an application to create an intentional buffer overflow vulnerability. The two "hook" routines can be injected individually or as a chain using LD_PRELOAD. Both "hooks" insert themselves in front of the libc->read() system call and watch for magic strings to pass. Basehook.so contains the overflow enpoint alone, while fullhook.so adds helpful endpoints that assist in generating valid shellcode that can then be turned around and used in basehook.so for the actual overflow (fullhook.so also contains . Use the following command line in the context of the OS in which you would like to hook the read syscall:
+Readhook consists of a set of shared libraries that can be injected into an application to create an intentional buffer overflow vulnerability. The hook routines basehook.so and fullhook.so can be injected individually or as a chain using LD_PRELOAD. Both hooks insert themselves in front of the libc->read() system call and watch for magic strings to pass. Basehook.so contains the overflow endpoint alone, while fullhook.so adds helpful endpoints that assist in generating valid shellcode that can then be turned around and used by basehook.so for the actual overflow (fullhook.so also contains an overflow endpoint for convenience). (Additionally, there are two helper hooks for developers; nullhook.so which does nothing, and noophook.so which injects itself before the libc->read() function and simply passes the request through.)
 ```
 ./build.sh
 ```

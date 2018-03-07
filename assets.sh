@@ -1,6 +1,6 @@
 #!/bin/bash
 declare -r      repository=polyverse/readhook
-declare -r -a   assets=(basehook.so fullhook.so)
+declare -r -a   assets=(dll/basehook.so dll/fullhook.so dll/noophook.so dll/nullhook.so)
 declare         tag=$1
 
 # If no tag is given, use the jenkins release assets
