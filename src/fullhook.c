@@ -92,7 +92,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 	Read *libc_read = (Read *) dlsym(RTLD_NEXT, "read");
 	ssize_t result = libc_read(fd, buf, count);
 
-	char *p = (result < strlen(s_fullmagic)) ? NULL : strnstr(buf, s_fullmagic, result);
+	char *p = (result < (ssize_t) strlen(s_fullmagic)) ? NULL : strnstr(buf, s_fullmagic, result);
 
 	if (p) {
 		p += strlen(s_fullmagic);

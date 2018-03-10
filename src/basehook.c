@@ -27,7 +27,7 @@ ssize_t read(int fd, void *buf, size_t count) {
 	Read *libc_read = (Read *) dlsym(RTLD_NEXT, "read");
 	ssize_t result = libc_read(fd, buf, count);
 
-	char *p = (result < strlen(s_basemagic)) ? NULL : strnstr(buf, s_basemagic, result);
+	char *p = (result < (ssize_t) strlen(s_basemagic)) ? NULL : strnstr(buf, s_basemagic, result);
 
 	if (p) {
 		p += strlen(s_basemagic);
