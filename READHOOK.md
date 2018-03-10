@@ -24,8 +24,8 @@ apt-get update -y && apt-get install -y curl netcat socat wget
 ```
 ### (2) Get readhook components
 ```
-wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/v1.2.1/basehook.so
-wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/v1.2.1/fullhook.so
+wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/v1.2.2/basehook.so
+wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/v1.2.2/fullhook.so
 ```
 ### (2) Start socat with readhook in front of libc
 socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD='/tmp/fullhook.so:/tmp/basehook.so' /bin/cat"
