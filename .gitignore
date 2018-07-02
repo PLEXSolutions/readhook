@@ -1,6 +1,7 @@
 # OS specific
 .DS_Store
-./app/*
+./app/
+./app/fullhook
 ./dll/*
 
 # vi/vim et. al.
