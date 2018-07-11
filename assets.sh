@@ -1,6 +1,6 @@
 #!/bin/bash
 declare -r      repository=polyverse/readhook
-declare -r -a   assets=(dll/basehook.so dll/fullhook.so dll/noophook.so dll/nullhook.so)
+declare -r -a   assets=(basehook.so fullhook.so noophook.so nullhook.so)
 declare         tag=$1
 
 # If no tag is given, use the jenkins release assets
@@ -15,7 +15,7 @@ process_asset()
 	delete_release_asset=$(pv github delete-release-asset $repository $asset_id_from_release_tag_and_name)
 	printf "delete-release-asset:\n$delete_release_asset\n"
 
-	upload_release_file_by_tag=$(pv github upload-release-file-by-tag $repository $tag $1)
+	upload_release_file_by_tag=$(pv github upload-release-file-by-tag $repository $tag dll/$1)
 	printf "upload-release-file-by-tag:\n$upload_release_file_by_tag\n"
 }
 
