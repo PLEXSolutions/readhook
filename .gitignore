@@ -1,6 +1,7 @@
 # OS specific
 .DS_Store
 ./dll/*
+./all/*
 
 # vi/vim et. al.
 *.swl

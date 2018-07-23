@@ -32,7 +32,7 @@ typedef struct Payload {
 	ShellCodeUnion	pl_scu;
 } Payload, *PayloadPtr;
 
-extern void initload(PayloadPtr plp);
-extern void makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
-extern void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
+extern void	initload(PayloadPtr plp);
+extern ssize_t	makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssize_t np);
+extern void	dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
 #endif

