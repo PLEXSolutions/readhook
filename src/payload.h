@@ -6,7 +6,7 @@
 
 typedef struct Payload {
 	// Stack frame from/including the buffer
-	char		pl_dst[8];
+	AddressUnion	pl_dst;
 	AddressUnion	pl_canary;
 
 	// ROP chain to make the stack executable

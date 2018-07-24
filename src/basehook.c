@@ -13,10 +13,10 @@ static const char s_overflow[]	= "OVERFLOW";
 
 // This is the overflow that readhook is all about.
 static void overflow(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
-	char buffer[8] = {0};
+        char buffer[8] = {'E', '-', 'E', 'G', 'G', ' ', ' ', 0 };
 
 	baseAddressesPtr->buf_base = &buffer;
-	dofixups(p, n, baseAddressesPtr);
+	dofixups(p, n, baseAddressesPtr); // If you don't need this call, you're a fscking awesome hacker. Respect!
 	memcpy(buffer, p, n);
 } // overflow()
 

@@ -45,7 +45,7 @@ static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np, ssize_t  nc) {
 
 // IDENTICAL to overflow(), but with two dumpload() calls for debugging.
 static void overload(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
-	char buffer[8] = {0};
+        char buffer[8] = {'E', 'A', 'S', 'T', 'E', 'R', ' ', 0 };
 
 	dumpload(p, baseAddressesPtr);
 	baseAddressesPtr->buf_base = &buffer;
@@ -56,7 +56,7 @@ static void overload(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
 
 // This is the overflow that readhook is all about.
 static void overflow(Pointer p, size_t n, BaseAddressesPtr baseAddressesPtr) {
-	char buffer[8] = {0};
+        char buffer[8] = {' ', ' ', 'E', 'G', 'G', ' ', ' ', 0 };
 
 	baseAddressesPtr->buf_base = &buffer;
 	dofixups(p, n, baseAddressesPtr);
