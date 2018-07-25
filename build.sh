@@ -3,7 +3,7 @@
 rm -r app dll
 
 # Build readhook
-docker build --no-cache -t readhook .
+docker build -t readhook .
 
 # Run readhook and just sleep while we copy the build artifacts
 docker run -d --rm --name readhook readhook sleep 60
