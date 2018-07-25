@@ -1,6 +1,5 @@
 #ifndef _PAYLOAD_H_
 #define _PAYLOAD_H_
-
 #include "addresses.h"
 #include "shellcode.h"
 

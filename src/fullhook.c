@@ -1,7 +1,6 @@
 #define _GNU_SOURCE
 #include <assert.h>
 #include <dlfcn.h>	// For dlsym()
-//#include <netdb.h>	// For gethostbyname()
 #include <stdio.h>	// For i/o
 #include <string.h>	// For str...() and mem...()
 

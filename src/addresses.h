@@ -13,7 +13,7 @@ typedef struct Offset {
 typedef union AddressUnion {
 	Pointer	p;
 	Offset	o;
-	char	c[8];
+	char	c[sizeof(Pointer)];
 } AddressUnion, *AddressUnionPtr;
 
 typedef struct BaseAddresses {
