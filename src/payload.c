@@ -6,9 +6,8 @@
 #include <unistd.h>
 
 #include "payload.h"
+#include "strlcpy.h"
 #include "strnstr.h"
-
-static const char s_defargs[]  = "tput bel";
 
 void initload(PayloadPtr plp) {
 	memset(plp, 0, sizeof(*plp));
@@ -52,15 +51,14 @@ l_popRDI:	// Fallback gadget for "POP RDI"
 	} // if
 
 	// Get the argument to "system()" (if provided)
-	if (p && np) {
-		strncpy(plp->pl_arg, p, sizeof(plp->pl_arg) - 1);
-		plp->pl_arg[sizeof(plp->pl_arg) - 1] = '\0';
-		ssize_t nc = strnlen(plp->pl_arg, sizeof(plp->pl_arg) - 1);
+	if (p && np > 0) {
+		size_t nc=strlcpy(plp->pl_arg, p, sizeof(plp->pl_arg));
+fprintf(stderr, "%ld\n", nc);
 		return nc;
 	} // if
 
 	// Fall-through to ring the bell
-	strncpy(plp->pl_arg, "tput bel", sizeof(plp->pl_arg) - 1);
+	strlcpy(plp->pl_arg, "tput bel", sizeof(plp->pl_arg));
 	return 0;
 } // makeload()
 
