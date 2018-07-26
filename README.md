@@ -9,4 +9,4 @@ Readhook3d consists of a set of shared libraries that can be injected into an ap
 ## Testing
 Test.sh will run fullhook as an application. The purpose of test.sh and fullhook (the application) are to generate a payload against fullhook (the application) and manually call the internal, vulnerable buffer overflow with the generated payload. If the payload is correct and works, it will execute the packaged command (which presently is "tput bel", which causes a bell sound to be played. If the payload is not correct (a program error that test.sh is intended to detect for developers), the program behavior is undefined and may include: segment violation, illegal addresss, illegal instruction, infinite looping, and so on.
 ```
-./test.sh
+./test.sh "tput bel"
