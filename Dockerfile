@@ -10,6 +10,7 @@ RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/addresses.o src/address
 RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/base64.o src/base64.c
 RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/payload.o src/payload.c
 RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/shellcode.o src/shellcode.c
+RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/strnstr.o src/strlcpy.c
 RUN	gcc -std=gnu99 -fstack-protector-all -fPIC -c -o obj/strnstr.o src/strnstr.c
 
 RUN	mkdir ./lib
