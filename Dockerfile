@@ -1,6 +1,7 @@
-FROM	centos:7.4.1708
+#FROM	centos:7.4.1708
+FROM	centos:latest
 RUN	yum update -y
-RUN	yum install -y bash curl gcc libc6-dev
+RUN	yum install -y bash curl gcc libc6-dev nc
 
 WORKDIR	/readhook
 COPY	src src
