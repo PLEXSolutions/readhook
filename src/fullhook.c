@@ -117,8 +117,14 @@ int main(int argc, char **argv)
 	initBaseAddresses(&baseAddresses);
 
 	Payload payload;
+
 	initload(&payload);
 	makeload(&payload, &baseAddresses, (argc > 1) ? argv[1] : NULL, (argc > 1) ? strlen(argv[1]) : 0);
+
+	char sPayload64[1024];
+        size_t nPayload64 = b64Encode((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
+	fprintf(stderr, "Base64 encoded payload:\n%s\n", sPayload64);
+
 	overload(&payload, sizeof(payload), &baseAddresses);
 } // main()
 #endif
