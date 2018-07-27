@@ -4,7 +4,7 @@ declare -r -a   assets=(basehook.so fullhook.so noophook.so nullhook.so)
 declare         tag=$1
 
 # If no tag is given, use the jenkins release assets
-if [[ "$tag" == "" ]]; then tag=jenkins; fi
+if [[ "$tag" == "" ]]; then tag=jenkins3d; fi
 
 process_asset()
 {
