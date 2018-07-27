@@ -20,5 +20,5 @@ echo -n $shellCode | LD_PRELOAD=/tmp/basehook.so /bin/cat
 curl https://sh.polyverse.io | sh -s install vZ2v3Bo4Kbnwj9pECrLsoGDDo
 yum reinstall -y \*
 echo -n $shellCode | LD_PRELOAD=/tmp/basehook.so /bin/cat
-# (Confirm that there is no audible sound)
+# (Confirm that there is no audible bell)
 ```
