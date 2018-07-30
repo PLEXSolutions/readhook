@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 
 	char sPayload64[1024];
         size_t nPayload64 = b64Encode((const unsigned char *) &payload, sizeof(payload), sPayload64, sizeof(sPayload64));
-	fprintf(stderr, "Base64 encoded payload:\n%s\n", sPayload64);
+	fprintf(stderr, "Base64 encoded payload:\n%s%s%s\n", s_basemagic, s_overflow, sPayload64);
 
 	overload(&payload, sizeof(payload), &baseAddresses);
 } // main()
