@@ -6,8 +6,8 @@ yum update -y && yum install -y curl wget
 ```
 ## Download Readhook3d Components
 ```
-wget -q -O /tmp/basehook.so https://github.com/polyverse/readhook/releases/download/jenkins3d/basehook.so
-wget -q -O /tmp/fullhook.so https://github.com/polyverse/readhook/releases/download/jenkins3d/fullhook.so
+wget -q -O /tmp/basehook.so https://github.com/plexsolutions/readhook/releases/download/jenkins3d/basehook.so
+wget -q -O /tmp/fullhook.so https://github.com/plexsolutions/readhook/releases/download/jenkins3d/fullhook.so
 ```
 ## Generate Shell-code and Perform Exploit
 ```
