@@ -1,5 +1,5 @@
 #!/bin/bash
-declare -r      repository=plexsystems/readhook
+declare -r      repository=plexsolutions/readhook
 declare -r -a   assets=(basehook.so fullhook.so noophook.so nullhook.so)
 declare         tag=$1
 
